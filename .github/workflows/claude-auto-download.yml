@@ -30,19 +30,41 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run auto-solution-downloader
+      - name: Install dependencies
+        run: npm install
+
+      - name: Poll Zoho CRM for qualified leads
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          ZOHO_CLIENT_ID:     ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          ZOHO_ACCESS_TOKEN:  ${{ secrets.ZOHO_ACCESS_TOKEN }}
+          ZOHO_DOMAIN:        www.zohoapis.com
+          ZOHO_ACCOUNTS_DOMAIN: accounts.zoho.com
+          ZOHO_MODULE:        Leads
+          N8N_API_URL:        ${{ secrets.N8N_API_URL }}
+          N8N_API_KEY:        ${{ secrets.N8N_API_KEY }}
+          GITHUB_TOKEN:       ${{ secrets.GH_TOKEN }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node zoho-poller.js
+
+      - name: Also run manual/dispatch trigger
+        if: github.event_name != 'schedule' || github.event.client_payload != null
+        env:
+          GITHUB_TOKEN:      ${{ secrets.GH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          N8N_API_URL: ${{ secrets.N8N_API_URL }}
-          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          CLIENT_DATA: ${{ github.event.client_payload && toJson(github.event.client_payload) || inputs.client_id != '' && format('{{"id":"{0}","name":"Client {0}","email":"","phone":"","needs":["lead-qualification"],"budget":0}}', inputs.client_id) || '{"id":"scheduled_run","name":"Scheduled Run","email":"","phone":"","needs":["lead-qualification","crm-sync"],"budget":0}' }}
-        run: node auto-solution-downloader.js
+          N8N_API_URL:       ${{ secrets.N8N_API_URL }}
+          N8N_API_KEY:       ${{ secrets.N8N_API_KEY }}
+          CLIENT_DATA: ${{ github.event.client_payload && toJson(github.event.client_payload) || inputs.client_id != '' && format('{{"id":"{0}","name":"Client {0}","email":"","phone":"","needs":["lead-qualification"],"budget":0}}', inputs.client_id) || '' }}
+        run: |
+          if [ -n "$CLIENT_DATA" ]; then
+            node auto-solution-downloader.js
+          fi
 
       - name: Commit and push
         run: |
           git config user.name "ai-system bot"
           git config user.email "bot@ai50m.com"
-          git add clients/ || true
-          git diff --staged --quiet || git commit -m "auto: solutions $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git add clients/ logs/ || true
+          git diff --staged --quiet || git commit -m "auto: zoho poll $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push || true
