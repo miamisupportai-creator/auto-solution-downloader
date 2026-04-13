@@ -115,16 +115,20 @@ function httpsGet(url, authToken) {
   });
 }
 
-function httpsPost(url, authToken, body) {
+function httpsPost(url, authToken, body, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const bodyStr = JSON.stringify(body);
+    const baseHeaders = authToken
+      ? { Authorization: `Bearer ${authToken}` }
+      : {};
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${authToken}`,
+        ...baseHeaders,
+        ...extraHeaders,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(bodyStr),
         'User-Agent': 'auto-solution-downloader/1.0'
@@ -154,6 +158,20 @@ function replaceVars(str, client) {
 
 // ─── Deploy to n8n ────────────────────────────────────────────────────────────
 
+async function httpsPostN8N(url, apiKey, body) {
+  const authHeaders = [
+    { 'X-N8N-API-KEY': apiKey },
+    { Authorization: `Bearer ${apiKey}` },
+  ];
+
+  for (const authHeader of authHeaders) {
+    const result = await httpsPost(url, null, body, authHeader);
+    if (result.statusCode >= 200 && result.statusCode < 300) return result;
+    if (result.statusCode !== 401) return result; // non-auth error, stop retrying
+  }
+  return { statusCode: 401, body: JSON.stringify({ message: 'All auth formats failed' }) };
+}
+
 async function deployToN8N(workflowObj, need) {
   const N8N_API_URL = process.env.N8N_API_URL;
   const N8N_API_KEY = process.env.N8N_API_KEY;
@@ -174,7 +192,7 @@ async function deployToN8N(workflowObj, need) {
   delete payload.shared;
 
   try {
-    const result = await httpsPost(N8N_API_URL, N8N_API_KEY, payload);
+    const result = await httpsPostN8N(N8N_API_URL, N8N_API_KEY, payload);
     if (result.statusCode === 200 || result.statusCode === 201) {
       console.log(`✅ Deployed to n8n: ${need}`);
     } else {
