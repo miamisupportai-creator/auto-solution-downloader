@@ -1,33 +1,34 @@
-name: "Auto-Download Solutions 24/7"
+name: Auto-Download Solutions 24/7
 
 on:
+  schedule:
+    - cron: '0 * * * *'
+  repository_dispatch:
+    types: [client-qualified]
   workflow_dispatch:
     inputs:
       client_id:
-        description: "Optional client ID for filtering (leave blank to use default test payload)"
+        description: 'Client ID (optional)'
         required: false
-        default: ""
-  schedule:
-    - cron: "0 */6 * * *"
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
-  download-solutions:
+  download-solution:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_TOKEN }}
+          fetch-depth: 0
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Run auto-solution-downloader
         env:
@@ -35,9 +36,13 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           N8N_API_URL: ${{ secrets.N8N_API_URL }}
           N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-          CLIENT_DATA: >-
-            ${{
-              inputs.client_id != '' && inputs.client_id ||
-              '{"id":"test_1","name":"Test Client","email":"test@example.com","phone":"+13055550000","needs":["lead-qualification"],"budget":5000}'
-            }}
+          CLIENT_DATA: ${{ github.event.client_payload && toJson(github.event.client_payload) || inputs.client_id != '' && format('{{"id":"{0}","name":"Client {0}","email":"","phone":"","needs":["lead-qualification"],"budget":0}}', inputs.client_id) || '{"id":"scheduled_run","name":"Scheduled Run","email":"","phone":"","needs":["lead-qualification","crm-sync"],"budget":0}' }}
         run: node auto-solution-downloader.js
+
+      - name: Commit and push
+        run: |
+          git config user.name "ai-system bot"
+          git config user.email "bot@ai50m.com"
+          git add clients/ || true
+          git diff --staged --quiet || git commit -m "auto: solutions $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push || true
