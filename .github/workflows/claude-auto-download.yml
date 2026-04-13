@@ -1,31 +1,43 @@
-name: Auto-Download Solutions 24/7
+name: "Auto-Download Solutions 24/7"
 
 on:
-  repository_dispatch:
-    types: [client-qualified]
-  schedule:
-    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       client_id:
-        description: 'Client ID (optional)'
+        description: "Optional client ID for filtering (leave blank to use default test payload)"
         required: false
-        type: string
+        default: ""
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
 
 jobs:
   download-solutions:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Setup Node 18
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-      
-      - name: Run Script
-        run: |
-          echo "✅ Workflow triggered successfully"
-          echo "Client ID: ${{ github.event.inputs.client_id }}"
-          echo "✅ System is 100% operational"
+          node-version: "20"
+
+      - name: Run auto-solution-downloader
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          N8N_API_URL: ${{ secrets.N8N_API_URL }}
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
+          CLIENT_DATA: >-
+            ${{
+              inputs.client_id != '' && inputs.client_id ||
+              '{"id":"test_1","name":"Test Client","email":"test@example.com","phone":"+13055550000","needs":["lead-qualification"],"budget":5000}'
+            }}
+        run: node auto-solution-downloader.js
