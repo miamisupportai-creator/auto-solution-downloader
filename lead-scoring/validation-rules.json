@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "salesRoutingGates": {
+    "minIcpFitScore": 35,
+    "minSignalTypes": 2,
+    "maxSignalAgeDays": 14,
+    "requireDecisionMaker": true,
+    "minHistoricalPatternMatch": 0.7
+  },
+  "contactValidation": {
+    "excludedTitles": [
+      "student",
+      "intern",
+      "contractor",
+      "volunteer",
+      "researcher"
+    ],
+    "requiredTitleKeywords": [
+      "owner",
+      "founder",
+      "ceo",
+      "cto",
+      "coo",
+      "director",
+      "manager",
+      "vp",
+      "president",
+      "head"
+    ],
+    "minConfidenceScore": 0.75
+  },
+  "accuracyTargets": {
+    "falsePositiveRate": 0.1,
+    "falseNegativeRate": 0.05,
+    "salesAcceptanceRate": 0.7
+  },
+  "overrides": {
+    "allowSalesEscalation": true,
+    "allowMarketingFalsePositiveMark": true,
+    "requireOverrideReason": true,
+    "logAllOverrides": true
+  },
+  "deploymentGates": {
+    "requireHumanApproval": true,
+    "approvalModes": [
+      "per_lead",
+      "auto_hot_daily_summary",
+      "weekly_batch",
+      "scoring_only"
+    ],
+    "defaultMode": "per_lead",
+    "stagingRequired": true,
+    "stagingConfirmationRequired": true
+  }
+}
