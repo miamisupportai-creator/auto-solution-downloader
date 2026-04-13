@@ -5,6 +5,18 @@
 
 import https from "https";
 
+const LEAD_FIELDS = [
+  "id","First_Name","Last_Name","Email","Phone","Mobile",
+  "Company","Lead_Status","Rating","Lead_Source",
+  "Annual_Revenue","No_of_Employees","Industry",
+  "Designation","Title","City","State","Country",
+  "Created_Time","Last_Activity_Time","Email_Opt_Out",
+  "Converted_Date_Time","Budget__c","Demo_Requested__c",
+  "Pricing_Page_Visited__c","Website_Visits__c",
+  "Emails_Opened__c","Emails_Clicked__c",
+  "Lead_Score__c","Lead_Tier__c","Score_Reasoning__c"
+].join(",");
+
 function httpsRequest(options, body = null) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -23,13 +35,13 @@ function httpsRequest(options, body = null) {
 
 export class ZohoCRMClient {
   constructor() {
-    this.domain       = process.env.ZOHO_DOMAIN        || "www.zohoapis.com";
+    this.domain         = process.env.ZOHO_DOMAIN         || "www.zohoapis.com";
     this.accountsDomain = process.env.ZOHO_ACCOUNTS_DOMAIN || "accounts.zoho.com";
-    this.token        = process.env.ZOHO_ACCESS_TOKEN;
-    this.module       = process.env.ZOHO_MODULE        || "Leads";
-    this.clientId     = process.env.ZOHO_CLIENT_ID;
-    this.clientSecret = process.env.ZOHO_CLIENT_SECRET;
-    this.refreshToken = process.env.ZOHO_REFRESH_TOKEN;
+    this.token          = process.env.ZOHO_ACCESS_TOKEN;
+    this.module         = process.env.ZOHO_MODULE         || "Leads";
+    this.clientId       = process.env.ZOHO_CLIENT_ID;
+    this.clientSecret   = process.env.ZOHO_CLIENT_SECRET;
+    this.refreshToken   = process.env.ZOHO_REFRESH_TOKEN;
   }
 
   // ── token refresh ──────────────────────────────────────────────────────────
@@ -88,11 +100,11 @@ export class ZohoCRMClient {
 
   // ── CRUD helpers ───────────────────────────────────────────────────────────
   async getRecords(limit = 50, page = 1) {
-    return this.request(`${this.module}?per_page=${limit}&page=${page}`);
+    return this.request(`${this.module}?per_page=${limit}&page=${page}&fields=${LEAD_FIELDS}`);
   }
 
   async getById(id) {
-    return this.request(`${this.module}/${id}`);
+    return this.request(`${this.module}/${id}?fields=${LEAD_FIELDS}`);
   }
 
   async updateRecord(id, fields) {
@@ -101,7 +113,7 @@ export class ZohoCRMClient {
 
   async searchByEmail(email) {
     const encoded = encodeURIComponent(email);
-    return this.request(`${this.module}/search?criteria=(Email:equals:${encoded})`);
+    return this.request(`${this.module}/search?criteria=(Email:equals:${encoded})&fields=${LEAD_FIELDS}`);
   }
 
   async upsertRecord(fields) {
@@ -115,8 +127,8 @@ export class ZohoCRMClient {
   // ── score writeback ────────────────────────────────────────────────────────
   async writeScore(recordId, scoreResult) {
     const fields = {
-      Lead_Score__c:     scoreResult.total,
-      Lead_Tier__c:      scoreResult.tier,
+      Lead_Score__c:      scoreResult.total,
+      Lead_Tier__c:       scoreResult.tier,
       Score_Reasoning__c: scoreResult.reasoning?.slice(0, 2000) || "",
     };
     return this.updateRecord(recordId, fields);
