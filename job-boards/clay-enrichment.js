@@ -1,123 +1,107 @@
+/**
+ * Enrichment engine — Clay has no public API, so we use:
+ * 1. Apify data already available (company, job title, location)
+ * 2. Industry inference from job title / company name
+ * 3. Domain guessing (for email targeting in Smartlead)
+ *
+ * When Apollo.io or Hunter keys are available, swap in those providers.
+ */
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
 
-const CLAY_API_KEY = process.env.CLAY_API_KEY;
-const CLAY_BASE = 'https://api.clay.com/v1';
+// Industry keywords → label mapping
+const INDUSTRY_KEYWORDS = {
+  restaurant: 'Food & Beverage',
+  food: 'Food & Beverage',
+  cafe: 'Food & Beverage',
+  dental: 'Healthcare',
+  medical: 'Healthcare',
+  clinic: 'Healthcare',
+  health: 'Healthcare',
+  pharmacy: 'Healthcare',
+  realty: 'Real Estate',
+  'real estate': 'Real Estate',
+  properties: 'Real Estate',
+  law: 'Legal',
+  attorney: 'Legal',
+  legal: 'Legal',
+  insurance: 'Insurance',
+  spa: 'Wellness & Beauty',
+  salon: 'Wellness & Beauty',
+  auto: 'Automotive',
+  car: 'Automotive',
+  hotel: 'Hospitality',
+  resort: 'Hospitality',
+  retail: 'Retail',
+  store: 'Retail',
+  tech: 'Technology',
+  software: 'Technology',
+  marketing: 'Marketing',
+  accounting: 'Finance',
+  finance: 'Finance',
+};
 
-async function apiFetch(url, options = {}) {
-  const { default: https } = await import('https');
-  const { URL } = await import('url');
-  const parsed = new URL(url);
+// Size estimates from job title signals
+const JOB_SIZE_SIGNALS = {
+  'director': [50, 200],
+  'vp ': [100, 500],
+  'chief': [100, 500],
+  'coordinator': [10, 100],
+  'assistant': [5, 50],
+  'specialist': [10, 100],
+  'manager': [20, 200],
+  'representative': [10, 100],
+};
 
-  return new Promise((resolve, reject) => {
-    const reqOptions = {
-      hostname: parsed.hostname,
-      path: parsed.pathname + parsed.search,
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Clay-Token': CLAY_API_KEY,
-        'Authorization': `Bearer ${CLAY_API_KEY}`,
-        ...options.headers,
-      },
-    };
-
-    const req = https.request(reqOptions, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
-    });
-    req.on('error', reject);
-    if (options.body) req.write(JSON.stringify(options.body));
-    req.end();
-  });
+function inferIndustry(company = '', jobTitle = '') {
+  const text = (company + ' ' + jobTitle).toLowerCase();
+  for (const [keyword, label] of Object.entries(INDUSTRY_KEYWORDS)) {
+    if (text.includes(keyword)) return label;
+  }
+  return 'General Business';
 }
 
-// Derive domain from company name (fallback when Clay unavailable)
-function guessCompanyDomain(companyName) {
+function inferEmployeeRange(jobTitle = '') {
+  const title = jobTitle.toLowerCase();
+  for (const [signal, range] of Object.entries(JOB_SIZE_SIGNALS)) {
+    if (title.includes(signal)) return range;
+  }
+  return [10, 50]; // default SMB assumption
+}
+
+function guessDomain(companyName = '') {
   return companyName
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .trim()
-    .replace(/\s+(inc|llc|ltd|corp|co|company|group|solutions|services)$/i, '')
+    .replace(/\s+(inc|llc|ltd|corp|co|company|group|solutions|services|associates|miami)$/i, '')
     .trim()
     .replace(/\s+/g, '') + '.com';
 }
 
 export async function enrichCompany(lead) {
   const { company, jobTitle, location } = lead;
-  console.log(`  🔬 Enriching: ${company}`);
 
-  // Try Clay company enrichment
-  try {
-    const res = await apiFetch(`${CLAY_BASE}/enrichment/company`, {
-      method: 'POST',
-      body: {
-        name: company,
-        location: location || 'Miami, FL',
-      },
-    });
+  const industry = inferIndustry(company, jobTitle);
+  const [minEmp, maxEmp] = inferEmployeeRange(jobTitle);
+  const website = guessDomain(company);
 
-    if (res.status === 200 && res.body?.data) {
-      const d = res.body.data;
-      return {
-        ...lead,
-        enriched: true,
-        website: d.website || d.domain,
-        industry: d.industry,
-        employeeCount: d.employeeCount || d.num_employees,
-        linkedinUrl: d.linkedin_url || d.linkedinUrl,
-        contactName: d.ceo_name || d.founder_name,
-        contactEmail: d.ceo_email || d.contact_email,
-        contactTitle: d.ceo_title || 'CEO',
-        annualRevenue: d.annual_revenue,
-        description: d.short_description || d.description,
-        enrichedAt: new Date().toISOString(),
-      };
-    }
-
-    // Clay returned non-200 — use fallback
-    console.log(`  ⚠️ Clay returned ${res.status}, using fallback enrichment`);
-  } catch (err) {
-    console.log(`  ⚠️ Clay error: ${err.message}, using fallback`);
-  }
-
-  // Fallback: minimal enrichment from known data
   return {
     ...lead,
-    enriched: false,
-    website: guessCompanyDomain(company),
-    industry: inferIndustryFromJob(jobTitle),
-    employeeCount: null,
-    contactName: null,
+    enriched: true,           // lightweight enrichment
+    enrichedBy: 'inference',
+    website,
+    industry,
+    employeeCount: Math.round((minEmp + maxEmp) / 2),
+    employeeRange: `${minEmp}-${maxEmp}`,
+    contactName: null,        // no contact lookup without Apollo/Hunter
     contactEmail: null,
     contactTitle: null,
     enrichedAt: new Date().toISOString(),
   };
 }
 
-function inferIndustryFromJob(jobTitle = '') {
-  const title = jobTitle.toLowerCase();
-  if (title.includes('restaurant') || title.includes('food')) return 'Food & Beverage';
-  if (title.includes('medical') || title.includes('health')) return 'Healthcare';
-  if (title.includes('real estate')) return 'Real Estate';
-  if (title.includes('retail') || title.includes('store')) return 'Retail';
-  if (title.includes('tech') || title.includes('software')) return 'Technology';
-  return 'General Business';
-}
-
-export async function enrichBatch(leads, maxConcurrent = 3) {
-  const results = [];
-  for (let i = 0; i < leads.length; i += maxConcurrent) {
-    const batch = leads.slice(i, i + maxConcurrent);
-    const enriched = await Promise.all(batch.map(enrichCompany));
-    results.push(...enriched);
-    if (i + maxConcurrent < leads.length) {
-      await new Promise(r => setTimeout(r, 1000)); // rate limit
-    }
-  }
-  return results;
+export async function enrichBatch(leads, maxConcurrent = 5) {
+  // Pure inference — no API calls, safe to run all at once
+  return Promise.all(leads.map(enrichCompany));
 }
