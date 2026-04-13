@@ -1,17 +1,16 @@
 {
-  "name": "ai-system",
+  "name": "auto-solution-downloader",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Automated n8n workflow downloader with Claude Code",
+  "main": "auto-solution-downloader.js",
   "scripts": {
-    "start": "node --env-file=.env agent-runner.js",
-    "import": "node n8n-import.js",
-    "status": "node status.js",
-    "versions": "node version-manager.js status",
-    "rollback": "node version-manager.js rollback"
+    "start": "node auto-solution-downloader.js",
+    "test": "node auto-solution-downloader.js test_client"
   },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.36.3",
-    "dotenv": "^16.4.5",
-    "node-fetch": "^3.3.2"
+  "keywords": ["n8n", "automation", "claude"],
+  "author": "AI50m",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
