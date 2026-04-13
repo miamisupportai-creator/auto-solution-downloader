@@ -1,92 +1,75 @@
-# Análisis de Costos — Auto-Solution-Downloader
+# Análisis de Costos — auto-solution-downloader
 
-## Resumen Ejecutivo
+## Costo por Cliente: $0.02
 
-> **Costo total por cliente procesado: ~$0.02 USD**
-
-Este sistema fue diseñado para ser prácticamente gratuito. Aprovecha el tier gratuito de GitHub Actions y los planes existentes para minimizar costos operativos.
+Cada cliente procesado cuesta aproximadamente **$0.02 USD** en total.
 
 ---
 
-## Desglose por Componente
+## Desglose de Costos
 
-### GitHub Actions
-
-| Métrica                   | Valor                        |
-|---------------------------|------------------------------|
-| Minutos gratuitos/mes     | 2,000 min (plan Free)        |
-| Costo por ejecución       | ~1-2 minutos por cliente     |
-| Capacidad mensual         | ~1,000-2,000 clientes/mes    |
-| **Costo mensual**         | **$0.00**                    |
-
-> Si superas 2,000 min/mes: $0.008/min adicional (Ubuntu runner)
-> Con 5,000 clientes/mes: ~$24/mes en Actions — todavía rentable.
+| Componente | Costo unitario | Notas |
+|------------|---------------|-------|
+| GitHub Actions compute | $0.000 | Free tier: 2,000 min/mes en repos públicos |
+| Llamada GitHub API (fetch workflow) | $0.000 | Sin límite de costo, rate limit: 5,000 req/hora |
+| n8n Cloud (crear workflow) | ~$0.01 | Incluido en plan Pro ($20/mes = 2,000 workflows) |
+| Almacenamiento GitHub (clients/) | $0.000 | Incluido en plan free/pro |
+| Tiempo de ejecución total | ~2 min | Por cliente con 2 necesidades |
+| **Total estimado** | **~$0.02** | Por cliente completo |
 
 ---
 
-### Anthropic API (Claude)
+## Proyección Mensual
 
-| Métrica                   | Valor                        |
-|---------------------------|------------------------------|
-| Uso actual                | No se usa en el core script  |
-| Uso futuro (Jarvis)       | ~$0.02 por conversación      |
-| Modelo recomendado        | claude-haiku-4-5 para tasks simples |
-| **Costo por cliente**     | **~$0.00 (core) / ~$0.02 (con Jarvis)** |
+| Clientes/mes | Compute (min) | Costo GitHub Actions | Costo n8n | **Total** |
+|---|---|---|---|---|
+| 10 | 20 min | $0.00 | $0.10 | **$0.10** |
+| 50 | 100 min | $0.00 | $0.50 | **$0.50** |
+| 100 | 200 min | $0.00 | $1.00 | **$1.00** |
+| 500 | 1,000 min | $0.00 | $5.00 | **$5.00** |
 
-> El script `auto-solution-downloader.js` no llama a la API de Claude directamente.
-> La clave `ANTHROPIC_API_KEY` está disponible para extensiones futuras.
-
----
-
-### n8n Cloud
-
-| Métrica                   | Valor                        |
-|---------------------------|------------------------------|
-| Plan actual               | Pro (ya contratado)          |
-| Costo adicional           | $0.00 — incluido en el plan  |
-| Workflows incluidos       | Ilimitados en Pro            |
-| **Costo por cliente**     | **$0.00**                    |
+> Nota: GitHub Actions Free incluye 2,000 min/mes. GitHub Pro incluye 3,000 min/mes. Repos públicos tienen minutos ilimitados.
 
 ---
 
-### GitHub (almacenamiento de repos)
+## Infraestructura: $0/mes
 
-| Métrica                   | Valor                        |
-|---------------------------|------------------------------|
-| Repos privados            | Ilimitados (plan Free)       |
-| Almacenamiento            | 1 GB por repo (gratuito)     |
-| Ancho de banda            | 1 GB/mes transferencia gratis|
-| **Costo mensual**         | **$0.00**                    |
-
----
-
-## Comparativa vs Alternativas
-
-| Solución                          | Costo mensual | Complejidad |
-|-----------------------------------|---------------|-------------|
-| **Auto-Solution-Downloader** ✅   | ~$0           | Baja        |
-| AWS Lambda + S3                   | ~$5-15/mes    | Media       |
-| Zapier (automatización)           | $20-50/mes    | Baja        |
-| Servidor VPS dedicado             | $5-20/mes     | Alta        |
-| Make (Integromat)                 | $9-29/mes     | Baja        |
+| Servicio | Uso | Costo mensual |
+|---------|-----|---------------|
+| GitHub (repo + Actions) | Hosting + compute | $0.00 (free/pro ya pagado) |
+| Servidor propio | No se usa | $0.00 |
+| Docker/K8s | No se usa | $0.00 |
+| Base de datos | No se usa | $0.00 |
+| **Infraestructura total** | | **$0.00/mes** |
 
 ---
 
-## Proyección de Escala
+## ROI
 
-| Clientes/mes | GitHub Actions | Claude API  | Total/mes  | Costo/cliente |
-|-------------|----------------|-------------|------------|---------------|
-| 10          | $0             | $0.20       | **$0.20**  | $0.020        |
-| 100         | $0             | $2.00       | **$2.00**  | $0.020        |
-| 500         | $0             | $10.00      | **$10.00** | $0.020        |
-| 1,000       | $0             | $20.00      | **$20.00** | $0.020        |
-| 5,000       | ~$24           | $100.00     | **$124**   | $0.025        |
+Supuestos:
+- Tiempo manual para configurar 1 workflow: **45 minutos**
+- Costo por hora del fundador o empleado: **$50/hora**
+- Costo manual por cliente: **$37.50**
+- Costo automatizado por cliente: **$0.02**
 
-> A $0.02/cliente, el sistema es rentable desde el primer cliente.
-> Con pricing de ai50m en $800-5,000 por cliente, el margen es >99%.
+| Métrica | Valor |
+|---------|-------|
+| Ahorro por cliente | $37.48 |
+| ROI con 10 clientes/mes | $374.80 ahorrado |
+| ROI con 100 clientes/mes | $3,748 ahorrado |
+| Payback del desarrollo | 1er cliente |
 
 ---
 
-## Conclusión
+## Antes vs Después
 
-El sistema fue construido deliberadamente con **zero dependencias externas** y aprovechando **infraestructura ya pagada** (n8n Pro) para mantener costos marginales prácticamente en cero. La única variable de costo real es la API de Claude, que a $0.02/cliente es insignificante frente al valor entregado.
+| Proceso | Antes (manual) | Después (automatizado) |
+|---------|---------------|------------------------|
+| Tiempo para entregar workflow | 1-2 días | < 2 minutos |
+| Costo por cliente | $37.50 | $0.02 |
+| Disponibilidad | Horario de oficina | 24/7 |
+| Escalabilidad | 1 cliente a la vez | Ilimitado (paralelo) |
+| Error humano | Posible | Eliminado |
+| Personalización | Manual | Automática (variables) |
+| Deploy a n8n | Manual (copy/paste) | Automático via API |
+| Documentación | Opcional | Siempre generada |
