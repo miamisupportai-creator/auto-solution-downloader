@@ -1,0 +1,50 @@
+{
+  "name": "Daily Outreach Trigger (Smartlead)",
+  "nodes": [
+    {
+      "id": "cron-trigger",
+      "name": "Daily 9 AM ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "hours", "hoursInterval": 4}]
+        }
+      }
+    },
+    {
+      "id": "http-outreach",
+      "name": "Trigger Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [440, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://outreach-orchestrator-placeholder.run.app/campaigns",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{\"min_score\": 45}"
+      }
+    },
+    {
+      "id": "http-analytics",
+      "name": "Fetch Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [640, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "https://outreach-orchestrator-placeholder.run.app/analytics"
+      }
+    }
+  ],
+  "connections": {
+    "Daily 9 AM ET": {
+      "main": [[{"node": "Trigger Outreach", "type": "main", "index": 0}]]
+    },
+    "Trigger Outreach": {
+      "main": [[{"node": "Fetch Analytics", "type": "main", "index": 0}]]
+    }
+  }
+}
