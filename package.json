@@ -1,0 +1,17 @@
+{
+  "name": "ai-system",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env agent-runner.js",
+    "import": "node n8n-import.js",
+    "status": "node status.js",
+    "versions": "node version-manager.js status",
+    "rollback": "node version-manager.js rollback"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2"
+  }
+}
