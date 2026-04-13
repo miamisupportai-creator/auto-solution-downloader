@@ -1,0 +1,108 @@
+{
+  "version": "1.0.0",
+  "events": {
+    "lead_scored": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "scores",
+        "tier",
+        "reasoning",
+        "signals",
+        "engineVersion"
+      ]
+    },
+    "validation_run": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "gatesPassed",
+        "gatesFailed",
+        "validForSales"
+      ]
+    },
+    "approval_requested": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "requestedBy",
+        "tier",
+        "score",
+        "reasoning"
+      ]
+    },
+    "approval_decision": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "decidedBy",
+        "decision",
+        "reason",
+        "overrideFlag"
+      ]
+    },
+    "deployment_initiated": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "approvedBy",
+        "solutions",
+        "environment",
+        "templateVersion"
+      ]
+    },
+    "staging_confirmed": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "confirmedBy",
+        "stagingResult",
+        "proceedToProduction"
+      ]
+    },
+    "production_deployed": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "solutions",
+        "n8nWorkflowIds",
+        "deployedBy"
+      ]
+    },
+    "conversion_outcome": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "converted",
+        "acv",
+        "daysToClose",
+        "wonAttributes"
+      ]
+    },
+    "model_recalibration": {
+      "fields": [
+        "timestamp",
+        "triggeredBy",
+        "oldWeights",
+        "newWeights",
+        "reason",
+        "approvedBy"
+      ]
+    },
+    "override": {
+      "fields": [
+        "leadId",
+        "timestamp",
+        "overrideBy",
+        "originalScore",
+        "overrideAction",
+        "reason"
+      ]
+    }
+  },
+  "retention": {
+    "hot_cold_events": "365 days",
+    "conversion_outcomes": "forever",
+    "model_changes": "forever"
+  }
+}
