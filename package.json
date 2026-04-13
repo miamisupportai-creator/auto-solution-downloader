@@ -1,16 +1,14 @@
 {
   "name": "auto-solution-downloader",
   "version": "1.0.0",
-  "description": "Automated n8n workflow downloader with Claude Code",
+  "description": "Auto-download n8n solutions from GitHub — zero dependencies",
   "main": "auto-solution-downloader.js",
+  "type": "module",
   "scripts": {
     "start": "node auto-solution-downloader.js",
     "test": "node auto-solution-downloader.js test_client"
   },
-  "keywords": ["n8n", "automation", "claude"],
-  "author": "AI50m",
-  "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   }
 }
