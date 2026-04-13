@@ -1,122 +1,132 @@
-# Guía de Configuración — Auto-Solution-Downloader
+# Guía de Setup — auto-solution-downloader
 
 ## Prerrequisitos
 
-- Node.js >= 18 instalado localmente
-- Cuenta de GitHub con acceso al repositorio
-- Instancia de n8n (cloud o self-hosted) — **opcional para import automático**
-- Token de GitHub con permisos `repo` y `workflow`
+- Node.js 20 o superior
+- Git configurado localmente
+- Cuenta GitHub con acceso al repo `miamisupportai-creator/auto-solution-downloader`
+- (Opcional) Cuenta n8n Cloud activa
 
 ---
 
 ## Instalación
 
+**Paso 1: Clonar el repositorio**
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/miamisupportai-creator/auto-solution-downloader.git
+git clone https://github.com/miamisupportai-creator/auto-solution-downloader
 cd auto-solution-downloader
+```
 
-# 2. Copiar las variables de entorno
+**Paso 2: Copiar el archivo de variables de entorno**
+```bash
 cp .env.example .env
+```
 
-# 3. Editar .env con tus valores reales
+**Paso 3: Editar `.env` con tus credenciales reales**
+```bash
 nano .env
+# o con VS Code:
+code .env
+```
+
+**Paso 4: Verificar Node.js**
+```bash
+node --version
+# Debe ser v20.x.x o superior
+```
+
+**Paso 5: Probar la ejecución local**
+```bash
+node auto-solution-downloader.js
 ```
 
 ---
 
 ## Configuración de Secrets
 
-Para que **GitHub Actions** funcione, añade estos 4 secrets en:
-`Settings → Secrets and variables → Actions → New repository secret`
+Ir a: GitHub → Settings → Secrets and variables → Actions → New repository secret
 
-| Secret            | Descripción                                           | Ejemplo                                      |
-|-------------------|-------------------------------------------------------|----------------------------------------------|
-| `GH_TOKEN`        | Token de GitHub con permisos repo + workflow          | `ghp_xxxxxxxxxxxx`                          |
-| `ANTHROPIC_API_KEY`| Clave de API de Anthropic (Claude)                   | `sk-ant-xxxxxxxxxxxx`                       |
-| `N8N_API_URL`     | URL del endpoint de workflows de n8n                 | `https://ai50m.app.n8n.cloud/api/v1/workflows`|
-| `N8N_API_KEY`     | Clave de API de n8n                                   | `eyJ0eXAiOiJKV1QiLCJhbGci...`              |
-
-> **Nota:** `N8N_API_URL` y `N8N_API_KEY` son opcionales. Si no se configuran, el sistema guarda los archivos localmente sin hacer import a n8n.
+| Secret | Requerido | Cómo obtenerlo |
+|--------|-----------|----------------|
+| `GH_TOKEN` | ✅ | github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → scopes: `repo` + `workflow` |
+| `ANTHROPIC_API_KEY` | ✅ | console.anthropic.com → API Keys |
+| `N8N_API_URL` | ⚙️ Opcional | `https://tu-instancia.app.n8n.cloud/api/v1/workflows` |
+| `N8N_API_KEY` | ⚙️ Opcional | n8n → Settings → n8n API → Create an API key |
 
 ---
 
-## Uso Manual
+## Testing Manual
 
-### Ejecución local
+Ejecutar con un cliente de prueba:
 
 ```bash
-# Exportar variables de entorno
-export GITHUB_TOKEN=ghp_xxxx
-export CLIENT_DATA='{"id":"cliente_001","name":"Miami Dental","email":"info@miamidental.com","phone":"+13055550101","needs":["lead-qualification","email-automation"],"budget":2500}'
+export GITHUB_TOKEN=ghp_tu_token_aqui
+export CLIENT_DATA='{"id":"test_001","name":"Empresa Test","email":"test@empresa.com","phone":"+13055550000","needs":["lead-qualification","crm-sync"],"budget":5000}'
 
-# Ejecutar
 node auto-solution-downloader.js
 ```
 
-### Resultado esperado
-
+**Resultado esperado:**
 ```
-🤖  Processing client: Miami Dental (cliente_001)
-📋  Needs: lead-qualification, email-automation
+🤖 auto-solution-downloader starting
+⚙️  Client: test_001 — Empresa Test
+⚙️  Needs: lead-qualification, crm-sync
 
-⚙️   Processing solution: lead-qualification
-📥  Fetching workflow from https://raw.githubusercontent.com/...
-✅  Saved clients/cliente_001/lead-qualification/workflow.json
-📋  Saved clients/cliente_001/lead-qualification/DEPLOYMENT_SUMMARY.md
+🤖 Processing solution: lead-qualification for client test_001
+📥 Fetching: https://raw.githubusercontent.com/...
+⚙️  Repo ... returned 404 — using fallback template
+📋 Saved: clients/test_001/lead-qualification/workflow.json
+📋 Saved: clients/test_001/lead-qualification/DEPLOYMENT_SUMMARY.md
 
-⚙️   Processing solution: email-automation
-📥  Fetching workflow from https://raw.githubusercontent.com/...
-✅  Saved clients/cliente_001/email-automation/workflow.json
-📋  Saved clients/cliente_001/email-automation/DEPLOYMENT_SUMMARY.md
-
-✅  Git push complete for client cliente_001
+✅ auto-solution-downloader completed successfully
 ```
 
 ---
 
-## Uso Automático (GitHub Actions)
+## GitHub Actions Automático
 
-### Ejecución manual desde GitHub
+El workflow `.github/workflows/claude-auto-download.yml` se ejecuta:
 
-1. Ve a tu repositorio en GitHub
-2. Haz clic en la pestaña **Actions**
-3. Selecciona **"Auto-Download Solutions 24/7"**
-4. Haz clic en **"Run workflow"**
-5. Opcionalmente ingresa un `client_id` para filtrar
-6. Haz clic en **"Run workflow"** (botón verde)
+- **Cada hora** (cron `0 * * * *`)
+- **On demand** desde la pestaña Actions → Run workflow
+- **Por trigger externo** via `repository_dispatch` con event type `client-qualified`
 
-### Ejecución automática
+### Trigger desde Zoho/n8n/Zapier
 
-El workflow se ejecuta automáticamente **cada 6 horas** gracias al schedule:
+Enviar un POST a la GitHub API:
 
-```yaml
-schedule:
-  - cron: "0 */6 * * *"
+```bash
+curl -X POST \
+  -H "Authorization: Bearer GH_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/repos/miamisupportai-creator/auto-solution-downloader/dispatches \
+  -d '{"event_type":"client-qualified","client_payload":{"id":"cliente_123","name":"Empresa ABC","email":"abc@empresa.com","phone":"+13055550000","needs":["lead-qualification"],"budget":3000}}'
 ```
 
 ---
 
 ## Monitoreo
 
-### Ver logs en GitHub Actions
+- Ver ejecuciones: GitHub → Actions → Auto-Download Solutions 24/7
+- Ver archivos generados: GitHub → Code → `clients/` directory
+- Logs de n8n: n8n Cloud → Executions
 
-1. Ve a **Actions** → selecciona el workflow run
-2. Haz clic en el job `download-solutions`
-3. Expande el paso **"Run auto-solution-downloader"**
+---
 
-### Revisar archivos generados
+## Troubleshooting
 
-Los archivos se guardan en:
-
-```
-clients/
-  {client_id}/
-    {solution}/
-      workflow.json          ← workflow listo para importar a n8n
-      DEPLOYMENT_SUMMARY.md  ← resumen con pasos de deployment
+### ❌ Error: GITHUB_TOKEN is required
+**Causa:** La variable de entorno no está seteada.
+**Solución:**
+```bash
+export GITHUB_TOKEN=ghp_tu_token
+# o agregar al archivo .env
 ```
 
-### Alertas de error
+### ❌ Git push authentication failed
+**Causa:** El token no tiene scope `repo` o `workflow`.
+**Solución:** Regenerar token en GitHub con los scopes correctos: `repo` (full control) + `workflow`.
 
-Si un workflow falla, GitHub te notificará por email automáticamente (configurado en tu perfil de GitHub bajo **Notifications**).
+### ❌ n8n deploy failed: 401 Unauthorized
+**Causa:** La `N8N_API_KEY` es incorrecta o expiró.
+**Solución:** n8n → Settings → n8n API → revocar y crear nueva API key. Actualizar el secret en GitHub.
