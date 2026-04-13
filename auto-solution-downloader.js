@@ -94,7 +94,7 @@ function httpsGet(url, authToken) {
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
-        Authorization: `Bearer ${authToken}`,
+        'X-N8N-API-KEY': authToken,
         'User-Agent': 'auto-solution-downloader/1.0'
       }
     };
@@ -281,7 +281,7 @@ async function main() {
   try {
     execSync('git config user.email "bot@ai50m.com"', { stdio: 'inherit' });
     execSync('git config user.name "ai-system"', { stdio: 'inherit' });
-    execSync('git add clients/', { stdio: 'inherit' });
+    execSync('git add -f clients/', { stdio: 'pipe' });
 
     const commitMsg = `client ${client.id}: ${client.needs.join(', ')}`;
     execSync(`git commit -m "${commitMsg}"`, { stdio: 'inherit' });
