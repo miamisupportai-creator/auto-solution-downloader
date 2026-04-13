@@ -1,0 +1,130 @@
+{
+  "name": "ai50m \u2014 Zoho Lead Qualified \u2192 GitHub Dispatch",
+  "nodes": [
+    {
+      "id": "webhook-node",
+      "name": "Zoho Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "path": "zoho-lead-qualified",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "zoho-lead-qualified"
+    },
+    {
+      "id": "extract-node",
+      "name": "Extract Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "jsCode": "\nconst body = $input.first().json.body || $input.first().json;\n\n// Zoho sends data under different keys depending on webhook version\nconst lead = body.data?.[0] || body;\n\nconst id     = lead.id             || lead.ID           || '';\nconst name   = [lead.First_Name, lead.Last_Name].filter(Boolean).join(' ') || lead.Full_Name || 'Unknown';\nconst email  = lead.Email          || '';\nconst phone  = lead.Phone || lead.Mobile || '';\nconst status = lead.Lead_Status    || lead.Status || 'Qualified';\nconst budget = parseFloat(lead.Annual_Revenue || lead.Budget__c || 0);\n\n// Map status \u2192 solution needs\nlet needs = ['lead-qualification'];\nif (status === 'Pre-Qualified' || status === 'Qualified') needs = ['lead-qualification', 'email-automation'];\nif (budget >= 10000) needs.push('crm-sync');\nif (budget >= 50000) needs.push('reporting');\n\nreturn [{\n  json: {\n    id:     id || `zoho_${Date.now()}`,\n    name,\n    email,\n    phone,\n    needs,\n    budget,\n    source: 'zoho_crm',\n    status\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "github-dispatch",
+      "name": "GitHub repository_dispatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.github.com/repos/miamisupportai-creator/auto-solution-downloader/dispatches",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"event_type\": \"client-qualified\",\n  \"client_payload\": {{ JSON.stringify($json) }}\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "respond-node",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"dispatched\", \"lead\": \"{{ $node[\"Extract Lead Data\"].json.name }}\" }",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Zoho Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Lead Data": {
+      "main": [
+        [
+          {
+            "node": "GitHub repository_dispatch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub repository_dispatch": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ai50m"
+    }
+  ]
+}
