@@ -237,35 +237,37 @@ async function main() {
 
     // ── 4. Generate DEPLOYMENT_SUMMARY.md ─────────────────────────────────
     const today = new Date().toISOString().split('T')[0];
-    const summary = `# Deployment Summary
-
-## Client Info
-| Field   | Value              |
-|---------|--------------------|
-| ID      | ${client.id}       |
-| Name    | ${client.name}     |
-| Email   | ${client.email || 'N/A'} |
-| Phone   | ${client.phone || 'N/A'} |
-| Budget  | $${client.budget || 0} |
-
-## Solution
-| Field       | Value         |
-|-------------|---------------|
-| Name        | ${need}        |
-| Repo        | ${repo}        |
-| Date        | ${today}       |
-| Status      | Ready to deploy |
-
-## Steps to Activate
-1. Import \`workflow.json\` into your n8n instance
-2. Review all nodes and verify credentials
-3. Activate the workflow from n8n dashboard
-4. Test with a sample POST to the webhook endpoint
-5. Monitor executions in n8n execution log
-
-## Webhook URL (after activation)
-\\`https://your-n8n-instance.app.n8n.cloud/webhook/client-${client.id}\`
-`;
+    const webhookUrl = 'https://ai50m.app.n8n.cloud/webhook/client-' + client.id;
+  const summary = [
+    '# Deployment Summary',
+    '',
+    '## Client',
+    '| Field   | Value |',
+    '|---------|-------|',
+    '| ID      | ' + client.id + ' |',
+    '| Name    | ' + (client.name || '') + ' |',
+    '| Email   | ' + (client.email || '') + ' |',
+    '| Phone   | ' + (client.phone || '') + ' |',
+    '| Budget  | $' + (client.budget || 0) + ' |',
+    '',
+    '## Solution',
+    '| Field  | Value |',
+    '|--------|-------|',
+    '| Name   | ' + need + ' |',
+    '| Repo   | ' + repo + ' |',
+    '| Date   | ' + today + ' |',
+    '| Status | Ready to deploy |',
+    '',
+    '## Steps to Activate',
+    '1. Import workflow.json into your n8n instance',
+    '2. Review all nodes and verify credentials',
+    '3. Activate the workflow from n8n dashboard',
+    '4. Test with a sample POST to the webhook endpoint',
+    '5. Monitor executions in n8n execution log',
+    '',
+    '## Webhook URL (after activation)',
+    webhookUrl,
+  ].join('\n');
 
     const summaryPath = path.join(dir, 'DEPLOYMENT_SUMMARY.md');
     fs.writeFileSync(summaryPath, summary, 'utf8');
