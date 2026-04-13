@@ -1,0 +1,159 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-04-13",
+  "weights": {
+    "firmographic": 0.3,
+    "behavioral": 0.4,
+    "intent": 0.3
+  },
+  "firmographic": {
+    "companySize": {
+      "max": 25,
+      "tiers": {
+        "1-10": 5,
+        "11-50": 12,
+        "51-200": 20,
+        "201-500": 25,
+        "501-1000": 22,
+        "1000+": 15
+      }
+    },
+    "industryMatch": {
+      "max": 20,
+      "tiers": {
+        "primary": 20,
+        "secondary": 12,
+        "adjacent": 6,
+        "no_match": 0
+      },
+      "primaryIndustries": [
+        "health",
+        "restaurant",
+        "retail",
+        "services",
+        "ecommerce",
+        "real_estate"
+      ],
+      "secondaryIndustries": [
+        "finance",
+        "education",
+        "hospitality",
+        "construction"
+      ]
+    },
+    "geographicFit": {
+      "max": 10,
+      "tiers": {
+        "miami": 10,
+        "florida": 8,
+        "usa": 6,
+        "latam": 4,
+        "other": 0
+      }
+    },
+    "budgetCapability": {
+      "max": 15,
+      "tiers": {
+        "500+": 15,
+        "200-499": 10,
+        "100-199": 6,
+        "50-99": 3,
+        "under_50": 0
+      }
+    },
+    "techStackCompatibility": {
+      "max": 10,
+      "compatible": [
+        "zoho",
+        "whatsapp",
+        "shopify",
+        "woocommerce",
+        "gmail",
+        "calendly"
+      ],
+      "pointsPerTool": 2
+    }
+  },
+  "behavioral": {
+    "pricingPageVisits": {
+      "single": 10,
+      "return3plus": 25,
+      "durationBonus3min": 15
+    },
+    "contentEngagement": {
+      "blogRead": 3,
+      "blogMaxPerSession": 15,
+      "whitepaperDownload": 15,
+      "caseStudyView": 10,
+      "webinarAttendance": 20,
+      "demoRequest": 50
+    },
+    "emailEngagement": {
+      "open": 3,
+      "click": 8,
+      "reply": 15,
+      "unsubscribe": -30
+    },
+    "sessionBehavior": {
+      "pointsPerPage": 2,
+      "maxPagesPerSession": 15,
+      "durationBonus5min": 10,
+      "returnVisitorSameWeek": 8
+    }
+  },
+  "intent": {
+    "hiringSignals": {
+      "targetDepartmentHiring": 15,
+      "expandingHeadcount": 10,
+      "cLevelChange": 12
+    },
+    "fundingEvents": {
+      "recentFunding": 20,
+      "seriesAC": 15,
+      "ipoAnnouncement": 18
+    },
+    "competitorResearch": {
+      "g2CapterraView": 12,
+      "competitorComparisonPage": 18,
+      "reviewSiteResearch": 10
+    },
+    "categoryResearch": {
+      "industryPublicationRead": 8,
+      "thirdPartyWebinar": 10,
+      "forumDiscussion": 5
+    }
+  },
+  "synergyBonus": {
+    "multipleChannelsSamePerson": 10,
+    "multiplePeopleSameAccount": 15,
+    "progressiveActivityIncrease": 20,
+    "allThree": 30
+  },
+  "temporalDecay": {
+    "0-7": 1,
+    "8-14": 0.8,
+    "15-30": 0.5,
+    "31-60": 0.25,
+    "60+": 0
+  },
+  "tiers": {
+    "hot": {
+      "min": 80,
+      "max": 100,
+      "action": "immediate_sdr",
+      "slaHours": 24
+    },
+    "warm": {
+      "min": 50,
+      "max": 79,
+      "action": "nurture_sequence",
+      "escalationDelta": 15
+    },
+    "cold": {
+      "min": 0,
+      "max": 49,
+      "action": "educational_content",
+      "rescore": "weekly"
+    }
+  }
+}
