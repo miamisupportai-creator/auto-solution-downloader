@@ -33,39 +33,65 @@ async function apiFetch(path, options = {}) {
   });
 }
 
-// Find or create ai50m campaign for Miami job board leads
+// Cache campaign ID within a run
+let _campaignId = null;
+
 async function getOrCreateCampaign() {
-  const listRes = await apiFetch('/campaigns');
+  if (_campaignId) return _campaignId;
+
+  // Check existing campaigns
+  const listRes = await apiFetch('/campaigns/');
   const campaigns = listRes.body?.data || listRes.body || [];
 
   if (Array.isArray(campaigns)) {
     const existing = campaigns.find(c =>
-      c.name?.includes('Miami Job Board') || c.name?.includes('ai50m-mvp')
+      c.name?.includes('ai50m — Miami') || c.name?.includes('ai50m-360-mvp')
     );
-    if (existing) return existing.id;
+    if (existing) {
+      _campaignId = existing.id;
+      console.log(`  📧 Using existing campaign: ${_campaignId}`);
+      return _campaignId;
+    }
   }
 
   // Create new campaign
-  const createRes = await apiFetch('/campaigns', {
+  const createRes = await apiFetch('/campaigns/create', {
     method: 'POST',
     body: {
-      name: 'ai50m — Miami Job Board Leads',
-      client_id: null,
-      track_settings: ['DONT_TRACK_EMAIL_OPEN', 'DONT_TRACK_LINK_CLICK'],
-      stop_lead_settings: 'REPLY_TO_AN_EMAIL',
-      unsubscribe_text: 'Unsubscribe',
-      send_as_plain_text: false,
-      follow_up_percentage: 40,
+      name: 'ai50m — Miami 360 MVP',
+      track_settings: {
+        track_open: true,
+        track_click: false,
+      },
     },
   });
 
   if (createRes.status === 200 || createRes.status === 201) {
     const id = createRes.body?.data?.id || createRes.body?.id;
+    if (!id) {
+      console.error('❌ No campaign ID in response:', JSON.stringify(createRes.body).slice(0, 200));
+      return null;
+    }
+
+    // Set schedule (required before sending)
+    await apiFetch(`/campaigns/${id}/schedule`, {
+      method: 'POST',
+      body: {
+        timezone: 'America/New_York',
+        days_of_the_week: [1, 2, 3, 4, 5],
+        start_hour: '09:00',
+        end_hour: '17:00',
+        min_time_btw_emails: 15,
+        max_new_leads_per_day: 20,
+      },
+    });
+
     console.log(`  📧 Created Smartlead campaign: ${id}`);
+    _campaignId = id;
     return id;
   }
 
-  console.error('❌ Failed to create campaign:', createRes.body);
+  console.error('❌ Failed to create campaign:', createRes.status, JSON.stringify(createRes.body).slice(0, 200));
   return null;
 }
 
@@ -74,20 +100,20 @@ function buildPersonalizedEmail(lead) {
   const jobTitle = lead.jobTitle || 'team role';
   const firstName = lead.contactName?.split(' ')[0] || 'there';
 
-  const subject = `Quick question about ${company}'s ${jobTitle.toLowerCase()} position`;
+  const subject = `Quick question about ${company}'s ${jobTitle.toLowerCase()} role`;
 
   const body = `Hi ${firstName},
 
-I noticed ${company} is hiring for a ${jobTitle} role — which often signals growing demand for that type of work.
+I noticed ${company} is hiring for a ${jobTitle.toLowerCase()} — a role that usually means that type of work is growing fast.
 
-We're an AI automation agency based in Miami (ai50m.com) and we've been helping companies like yours automate exactly those kinds of tasks — usually saving 15-20 hours per week.
+We're an AI automation agency in Miami (ai50m.com) and we help businesses automate exactly those workflows. Most clients save 15-20 hours/week and cut costs by 30-40%.
 
-Would it make sense to jump on a 15-minute call to see if there's a fit? I can show you a quick demo of what we've built for similar businesses.
+Would a 15-minute call make sense? I can show you a quick demo of what we've built for similar companies in Miami.
 
 Best,
 Rey
 Founder, ai50m
-We Automate. You Grow. | ai50m.com`;
+We Automate. You Grow.`;
 
   return { subject, body };
 }
@@ -97,19 +123,20 @@ export async function addLeadToSmartlead(lead) {
   if (!campaignId) return false;
 
   const { subject, body } = buildPersonalizedEmail(lead);
+  const email = lead.contactEmail ||
+    `info@${(lead.website || lead.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com')}`;
 
-  // Build lead object
   const leadPayload = {
     lead_list: [{
       first_name: lead.contactName?.split(' ')[0] || '',
       last_name: lead.contactName?.split(' ').slice(1).join(' ') || '',
-      email: lead.contactEmail || `info@${lead.website || lead.company.toLowerCase().replace(/\s+/g, '') + '.com'}`,
+      email,
       company_name: lead.company,
       custom_fields: {
         job_title_found: lead.jobTitle || '',
         lead_score: String(lead.leadScore || 0),
         tier: lead.tier || 'WARM',
-        source: 'indeed',
+        source: 'indeed_apify',
         location: lead.location || 'Miami, FL',
       },
     }],
@@ -121,25 +148,26 @@ export async function addLeadToSmartlead(lead) {
   });
 
   if (addRes.status === 200 || addRes.status === 201) {
-    console.log(`  ✅ Lead added to Smartlead: ${lead.company}`);
+    const added = addRes.body?.data?.total_leads_added ?? addRes.body?.total_leads_added ?? '?';
+    console.log(`  ✅ ${lead.company} → Smartlead (added: ${added})`);
     return true;
   }
 
-  console.error(`  ❌ Failed to add ${lead.company}:`, addRes.status, addRes.body);
+  console.error(`  ❌ ${lead.company}: ${addRes.status}`, JSON.stringify(addRes.body).slice(0, 150));
   return false;
 }
 
 export async function addBatchToSmartlead(leads, minScore = 45) {
   const qualified = leads.filter(l => (l.leadScore || 0) >= minScore);
-  console.log(`\n📧 Smartlead: ${qualified.length}/${leads.length} leads qualify (score >= ${minScore})`);
+  console.log(`\n📧 Smartlead: ${qualified.length}/${leads.length} qualify (score ≥ ${minScore})`);
 
   let added = 0;
   for (const lead of qualified) {
     const success = await addLeadToSmartlead(lead);
     if (success) added++;
-    await new Promise(r => setTimeout(r, 500)); // rate limit
+    await new Promise(r => setTimeout(r, 800));
   }
 
-  console.log(`  Sent to Smartlead: ${added}/${qualified.length}`);
+  console.log(`  Total sent to Smartlead: ${added}/${qualified.length}`);
   return added;
 }
