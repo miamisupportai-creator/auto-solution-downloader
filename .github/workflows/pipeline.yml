@@ -1,0 +1,46 @@
+name: ai-system pipeline 24/7
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm install
+
+      - name: Run pipeline
+        env:
+          GITHUB_TOKEN:      ${{ secrets.GH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          N8N_API_URL:       ${{ secrets.N8N_API_URL }}
+          N8N_API_KEY:       ${{ secrets.N8N_API_KEY }}
+        run: node agent-runner.js
+
+      - name: Commit outputs
+        run: |
+          git config user.name  "ai-system bot"
+          git config user.email "bot@ai50m.com"
+          git add outputs/ outputs/versions/ || true
+          git diff --staged --quiet || git commit -m "chore: pipeline $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push || true
+
+      - name: Status
+        if: always()
+        run: node status.js
