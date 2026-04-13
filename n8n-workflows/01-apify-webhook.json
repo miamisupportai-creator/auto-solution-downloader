@@ -1,0 +1,39 @@
+{
+  "name": "Apify Webhook → Lead Receiver",
+  "nodes": [
+    {
+      "id": "webhook-apify",
+      "name": "Apify Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "path": "apify-lead-received",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson"
+      }
+    },
+    {
+      "id": "notify-slack",
+      "name": "Log to Console",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [440, 300],
+      "parameters": {
+        "options": {},
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "message", "value": "=New lead received: {{ $json.lead_id }}", "type": "string"}
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Apify Webhook": {
+      "main": [[{"node": "Log to Console", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"saveManualExecutions": true}
+}
