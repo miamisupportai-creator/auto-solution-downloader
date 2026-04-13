@@ -1,140 +1,122 @@
-# Arquitectura del Sistema — Auto-Solution-Downloader
+# Arquitectura — auto-solution-downloader
 
-## Diagrama General
+## Descripción General
+
+Sistema de descarga e instalación automatizada de workflows n8n para clientes de ai50m.
+Corre 24/7 en GitHub Actions sin infraestructura propia. Costo mensual: $0.
+
+---
+
+## Diagrama Completo
 
 ```
-┌─────────────┐    trigger     ┌──────────────────────┐
-│   Zoho CRM  │ ─────────────► │   GitHub Actions      │
-│  (lead data)│                │  (schedule / manual)  │
-└─────────────┘                └──────────┬───────────┘
-                                          │  CLIENT_DATA (env)
-                                          ▼
-                               ┌──────────────────────────────┐
-                               │  auto-solution-downloader.js  │
-                               │  ─────────────────────────── │
-                               │  1. Parse CLIENT_DATA         │
-                               │  2. For each need:            │
-                               │     - Fetch workflow.json     │
-                               │     - Substitute placeholders │
-                               │     - Save to clients/        │
-                               │     - Import to n8n (opt)     │
-                               │  3. Git commit + push         │
-                               └──────────┬───────────────────┘
-                                          │
-                     ┌────────────────────┼────────────────────┐
-                     │                    │                     │
-                     ▼                    ▼                     ▼
-          ┌──────────────────┐  ┌──────────────────┐  ┌────────────────┐
-          │  GitHub Repos    │  │   Local clients/ │  │   n8n Cloud    │
-          │  (source repos)  │  │   (git-tracked)  │  │   (activated)  │
-          │  n8n-*-solution  │  │  workflow.json   │  │   workflows    │
-          └──────────────────┘  └──────────────────┘  └────────────────┘
+                        ┌──────────────────┐
+                        │    Zoho CRM      │
+                        │  (nuevo lead)    │
+                        └────────┬─────────┘
+                                 │ repository_dispatch
+                                 ▼
+┌────────────────┐    ┌──────────────────────┐    ┌────────────────┐
+│  Manual run    │───▶│   GitHub Actions     │◀───│  Cron: 0 * * * │
+│ (workflow_disp)│    │  (ubuntu-latest)     │    │  (cada hora)   │
+└────────────────┘    └──────────┬───────────┘    └────────────────┘
+                                 │
+                                 │ node auto-solution-downloader.js
+                                 ▼
+                    ┌────────────────────────────┐
+                    │   auto-solution-downloader  │
+                    │                            │
+                    │  ┌──────────────────────┐  │
+                    │  │  1. Parse CLIENT_DATA │  │
+                    │  └──────────┬───────────┘  │
+                    │             ▼              │
+                    │  ┌──────────────────────┐  │
+                    │  │  2. For each need:   │  │
+                    │  │   • Lookup SOLUTIONS │  │
+                    │  │   • Fetch from GitHub│  │
+                    │  │   • Fallback template│  │
+                    │  │   • Replace vars     │  │
+                    │  │   • Save files       │  │
+                    │  └──────────┬───────────┘  │
+                    │             ▼              │
+                    │  ┌──────────────────────┐  │
+                    │  │  3. Deploy to n8n    │  │
+                    │  │     (if configured)  │  │
+                    │  └──────────┬───────────┘  │
+                    │             ▼              │
+                    │  ┌──────────────────────┐  │
+                    │  │  4. git commit+push  │  │
+                    │  └──────────────────────┘  │
+                    └─────────────┬──────────────┘
+                                  │
+               ┌──────────────────┼──────────────────┐
+               ▼                  ▼                  ▼
+  ┌────────────────┐  ┌─────────────────┐  ┌──────────────────┐
+  │   n8n Cloud    │  │  GitHub Repo    │  │  DEPLOYMENT      │
+  │  (workflow     │  │  clients/       │  │  SUMMARY.md      │
+  │   activo)      │  │  {id}/{need}/   │  │  (instrucciones) │
+  └────────────────┘  └─────────────────┘  └──────────────────┘
 ```
 
 ---
 
 ## Componentes
 
-### 1. Zoho CRM
+### 1. auto-solution-downloader.js
+Script principal en Node.js (ESM). Sin dependencias externas. Orquesta todo el proceso.
 
-**Rol:** Fuente de datos del cliente.
+### 2. SOLUTIONS_MAP
+Diccionario interno que mapea cada necesidad del cliente a un repo de GitHub con el workflow template.
 
-Cuando un lead avanza a una etapa específica en Zoho CRM (ej. "Propuesta Aceptada"), un webhook o trigger dispara el GitHub Actions workflow con los datos del cliente como payload `CLIENT_DATA`.
+### 3. HTTPS Client
+Implementación manual con seguimiento de redirects. No usa axios ni node-fetch.
 
-**Datos que envía:**
-- `id`: identificador único del cliente
-- `name`, `email`, `phone`: datos de contacto
-- `needs`: array de soluciones requeridas
-- `budget`: presupuesto del cliente
+### 4. Variable Injector
+Reemplaza placeholders en el JSON del workflow: CLIENT_ID, CLIENT_NAME, CLIENT_EMAIL, CLIENT_PHONE, BUDGET.
 
----
+### 5. Fallback Template Generator
+Si el repo de solución no existe (404), genera un workflow funcional mínimo con un webhook, un nodo de código y un responder.
 
-### 2. GitHub Actions
-
-**Rol:** Orquestador de ejecución serverless.
-
-El workflow `.github/workflows/claude-auto-download.yml` se ejecuta:
-- **Automáticamente** cada 6 horas (cron schedule)
-- **Manualmente** desde la UI de GitHub (workflow_dispatch)
-- **Programáticamente** via GitHub API (integración Zoho)
-
-Beneficios:
-- Sin servidor que mantener
-- Logs automáticos
-- Reintentos nativos
-- Secrets management integrado
-
----
-
-### 3. auto-solution-downloader.js
-
-**Rol:** Motor principal de descarga y personalización.
-
-Pasos que ejecuta por cada solución requerida:
-
-1. **Fetch**: Descarga `workflow.json` desde el repo fuente usando `https` nativo
-2. **Substitute**: Reemplaza todos los placeholders `${CLIENT_ID}`, `${CLIENT_NAME}`, etc. con datos reales
-3. **Save**: Guarda archivos en `clients/{id}/{solution}/`
-4. **Import** *(opcional)*: POST a la API de n8n para crear el workflow
-5. **Git push**: Commitea y pushea los archivos generados
-
-Sin dependencias externas — solo módulos built-in de Node.js.
-
----
-
-### 4. GitHub Repos (Soluciones)
-
-**Rol:** Catálogo de workflows n8n pre-construidos.
-
-Cada repo contiene un `workflow.json` plantilla con variables:
-- `${CLIENT_ID}`
-- `${CLIENT_NAME}`
-- `${CLIENT_EMAIL}`
-- `${CLIENT_PHONE}`
-- `${BUDGET}`
-
-Repos disponibles:
-
-| Clave                 | Repositorio                                        |
-|-----------------------|----------------------------------------------------|
-| `lead-qualification`  | miamisupportai-creator/n8n-lead-qualification      |
-| `email-automation`    | miamisupportai-creator/n8n-email-automation        |
-| `crm-sync`            | miamisupportai-creator/n8n-crm-sync                |
-| `order-processing`    | miamisupportai-creator/n8n-order-processing        |
-| `customer-support`    | miamisupportai-creator/n8n-customer-support        |
-| `reporting`           | miamisupportai-creator/n8n-reporting               |
-
----
-
-### 5. n8n Cloud
-
-**Rol:** Motor de ejecución de automatizaciones.
-
-Los workflows importados se activan en n8n y empiezan a procesar datos del cliente automáticamente. La plataforma maneja:
-- Ejecución en tiempo real
-- Reintentos en caso de error
-- Logs de ejecución
-- Integraciones con terceros (CRM, email, etc.)
+### 6. GitHub Actions Workflow
+Archivo YAML que define los triggers, el entorno de ejecución y los pasos. Maneja el git commit final.
 
 ---
 
 ## Flujo de Datos
 
-```
-CLIENT_DATA (JSON) → parse → validar campos requeridos
-                              ↓
-               por cada need en client.needs:
-                              ↓
-               SOLUTIONS_MAP[need] → repo URL
-                              ↓
-               GET raw.githubusercontent.com/{repo}/main/workflow.json
-                              ↓
-               substituteVars() → reemplazar ${CLIENT_*} con datos reales
-                              ↓
-               fs.writeFileSync() → clients/{id}/{solution}/workflow.json
-               fs.writeFileSync() → clients/{id}/{solution}/DEPLOYMENT_SUMMARY.md
-                              ↓
-               [opcional] POST n8n API → crear workflow
-                              ↓
-               git add + commit + push → GitHub
-```
+1. **Entrada:** `CLIENT_DATA` llega como JSON via env var o `client_payload` en el dispatch
+2. **Validación:** Se verifica `GITHUB_TOKEN` (requerido) y se parsea el JSON
+3. **Iteración:** Para cada item en `client.needs`, se busca en `SOLUTIONS_MAP`
+4. **Descarga:** GET a `https://raw.githubusercontent.com/{repo}/main/workflow.json` con auth
+5. **Transformación:** Se reemplazan variables en el JSON string con datos del cliente
+6. **Persistencia:** Se escriben archivos en `clients/{id}/{need}/`
+7. **Deploy:** Si `N8N_API_URL` y `N8N_API_KEY` están seteados, POST al API de n8n
+8. **Git:** `git add`, `git commit`, `git push` con token en la URL remota
+
+---
+
+## Integraciones
+
+### Zoho CRM
+Trigger externo via `repository_dispatch`. Un webhook en n8n o Zoho puede hacer un POST a la GitHub API para iniciar el proceso cuando un lead se califica.
+
+### n8n Cloud
+El script hace POST a `/api/v1/workflows` con el workflow personalizado. Antes de enviar, se eliminan campos de solo lectura: `active`, `id`, `createdAt`, `updatedAt`, `versionId`, `tags`, `shared`.
+
+### GitHub
+- Fuente de templates de workflows (repos separados por solución)
+- Almacén de archivos generados (directorio `clients/`)
+- Runtime de ejecución (GitHub Actions)
+- Autenticación via PAT (`GH_TOKEN`)
+
+---
+
+## Escalabilidad
+
+| Escenario | Comportamiento |
+|-----------|----------------|
+| 1 cliente/hora | Cron natural, sin cambios |
+| 50 clientes simultáneos | Múltiples dispatches paralelos — GitHub Actions crea un job por dispatch |
+| 500 clientes/mes | ~500 runs × 2min = ~17 horas de compute. GitHub Free: 2000 min/mes — costo $0 |
+| Nuevo tipo de solución | Agregar entrada a SOLUTIONS_MAP y crear repo con workflow.json |
+| Nuevo campo de cliente | Agregar a replaceVars() y al DEPLOYMENT_SUMMARY.md template |
