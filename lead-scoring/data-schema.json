@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LeadData",
+  "description": "Normalized lead data schema for scoring engine",
+  "type": "object",
+  "required": ["id", "company", "contact", "engagement", "signals"],
+  "properties": {
+    "id":    { "type": "string", "description": "Zoho record ID" },
+    "name":  { "type": "string" },
+    "email": { "type": "string", "format": "email" },
+    "company": {
+      "type": "object",
+      "properties": {
+        "name":          { "type": "string" },
+        "industry":      { "type": "string" },
+        "employeeCount": { "type": "number" },
+        "annualRevenue": { "type": "number" },
+        "country":       { "type": "string" },
+        "state":         { "type": "string" },
+        "city":          { "type": "string" }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "title":       { "type": "string" },
+        "seniority":   { "type": "string", "enum": ["c_suite","vp","director","manager","individual","unknown"] },
+        "phone":       { "type": "string" },
+        "linkedinUrl": { "type": "string" }
+      }
+    },
+    "engagement": {
+      "type": "object",
+      "properties": {
+        "leadSource":       { "type": "string" },
+        "leadStatus":       { "type": "string" },
+        "rating":           { "type": "string" },
+        "lastActivityDate": { "type": "string", "format": "date" },
+        "createdAt":        { "type": "string", "format": "date-time" },
+        "convertedAt":      { "type": ["string","null"] },
+        "emailOptOut":      { "type": "boolean" }
+      }
+    },
+    "signals": {
+      "type": "object",
+      "properties": {
+        "budgetMentioned":    { "type": "boolean" },
+        "budgetAmount":       { "type": ["number","null"] },
+        "urgencyMentioned":   { "type": "boolean" },
+        "demoRequested":      { "type": "boolean" },
+        "pricingPageVisited": { "type": "boolean" },
+        "websiteVisits":      { "type": "number" },
+        "emailsOpened":       { "type": "number" },
+        "emailsClicked":      { "type": "number" }
+      }
+    },
+    "_raw":        { "description": "Original Zoho record, pass-through" },
+    "_budgetTier": { "type": "string", "enum": ["enterprise","mid","smb","unknown"] }
+  }
+}
