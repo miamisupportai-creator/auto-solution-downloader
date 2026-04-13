@@ -1,0 +1,179 @@
+{
+  "name": "Lead Qualification — Test Lead",
+  "nodes": [
+    {
+      "id": "webhook-1",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "path": "qualify-test_001",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      }
+    },
+    {
+      "id": "code-1",
+      "name": "Score Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst name = body.name || \"Test Lead\";\nconst budget = parseInt(body.budget || \"0\");\nconst phone = body.phone || \"+13055550000\";\nconst email = body.email || \"test@example.com\";\n\nlet score = 0;\nif (budget >= 1000) score += 40;\nelse if (budget >= 500) score += 20;\nif (phone) score += 20;\nif (email) score += 20;\nif (body.message && body.message.length > 50) score += 20;\n\nreturn [{ json: { name, budget, phone, email, score, clientId: \"test_001\", timestamp: new Date().toISOString() } }];"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Is Qualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.score }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "http-1",
+      "name": "Update CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        920,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zohocrm.com/v2/Leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "data[0][Last_Name]",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "data[0][Phone]",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "data[0][Email]",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "data[0][Lead_Source]",
+              "value": "WhatsApp — Test Lead"
+            },
+            {
+              "name": "data[0][Lead_Status]",
+              "value": "Qualified"
+            },
+            {
+              "name": "data[0][Description]",
+              "value": "Score: ={{ $json.score }}. Budget: ={{ $json.budget }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "respond-1",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, score: $(\"Score Lead\").first().json.score, client: \"Test Lead\" }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Is Qualified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Qualified?": {
+      "main": [
+        [
+          {
+            "node": "Update CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update CRM": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

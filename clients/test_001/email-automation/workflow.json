@@ -1,0 +1,186 @@
+{
+  "name": "Email Automation — Test Lead",
+  "nodes": [
+    {
+      "id": "schedule-1",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "http-1",
+      "name": "Get Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.zohocrm.com/v2/Contacts?criteria=(Lead_Status:equals:Active)",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Zoho-oauthtoken test_001"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "code-1",
+      "name": "Build Email Sequence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const contacts = $input.first().json.data || [];\nconst today = new Date();\nconst emails = contacts.map(contact => {\n  const days = Math.floor((today - new Date(contact.Created_Time)) / 86400000);\n  let sequence = \"day1\";\n  if (days >= 7) sequence = \"day7\";\n  if (days >= 14) sequence = \"day14\";\n  return { to: contact.Email, name: contact.Full_Name || \"Test Lead Customer\", clientId: \"test_001\", sequence, days };\n});\nreturn emails.map(e => ({ json: e }));"
+      }
+    },
+    {
+      "id": "if-1",
+      "name": "Has Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.to }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "email-1",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        200
+      ],
+      "parameters": {
+        "fromEmail": "test@example.com",
+        "toEmail": "={{ $json.to }}",
+        "subject": "Seguimiento de {{ $json.name }} — Test Lead",
+        "emailType": "html",
+        "message": "<p>Hola {{ $json.name }},</p><p>Somos el equipo de Test Lead. Queriamos hacer un seguimiento de tu consulta.</p><p>Tienes 15 minutos esta semana para una llamada rapida?</p><p>Test Lead</p>",
+        "options": {}
+      }
+    },
+    {
+      "id": "code-2",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const results = $input.all().map(item => ({\n  to: item.json.to,\n  sequence: item.json.sequence,\n  sentAt: new Date().toISOString(),\n  client: \"Test Lead\",\n  clientId: \"test_001\"\n}));\nconsole.log(\"Email sequence sent:\", JSON.stringify(results));\nreturn results.map(r => ({ json: r }));"
+      }
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Contacts": {
+      "main": [
+        [
+          {
+            "node": "Build Email Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Sequence": {
+      "main": [
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email?": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
