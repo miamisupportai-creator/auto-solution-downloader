@@ -1,0 +1,102 @@
+name: Generate Campaign (Landing + PDF + WhatsApp)
+
+on:
+  workflow_dispatch:
+    inputs:
+      company:
+        description: 'Company name (e.g. "Super Dentist Miami")'
+        required: true
+      website:
+        description: 'Website URL (e.g. https://superdentist.com)'
+        required: false
+      phone:
+        description: 'WhatsApp phone (digits only, e.g. 17861234567)'
+        required: false
+      email:
+        description: 'Contact email'
+        required: false
+      name:
+        description: 'Contact first name'
+        required: false
+      industry:
+        description: 'Industry hint (healthcare, restaurant, retail, services)'
+        required: false
+        default: 'services'
+      send_whatsapp:
+        description: 'Send WhatsApp message? (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate campaign (landing + analysis)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WASENDER_API_KEY: ${{ secrets.WASENDER_API_KEY }}
+        run: |
+          node scripts/generate-campaign.js \
+            --company "${{ github.event.inputs.company }}" \
+            --website "${{ github.event.inputs.website }}" \
+            --phone "${{ github.event.inputs.phone }}" \
+            --email "${{ github.event.inputs.email }}" \
+            --name "${{ github.event.inputs.name }}" \
+            --industry "${{ github.event.inputs.industry }}" \
+            ${{ github.event.inputs.send_whatsapp == 'true' && '--send-whatsapp' || '' }}
+
+      - name: Generate PDF from landing page
+        run: |
+          SLUG=$(echo "${{ github.event.inputs.company }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+          
+          # Install chromium for puppeteer
+          npx puppeteer browsers install chrome
+          
+          # Generate PDF
+          node -e "
+          import('puppeteer').then(async ({ default: puppeteer }) => {
+            const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+            const page = await browser.newPage();
+            await page.setViewport({ width: 1200, height: 900 });
+            const html = require('fs').readFileSync('campaigns/${SLUG}/index.html', 'utf-8');
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            await page.pdf({
+              path: 'campaigns/${SLUG}/propuesta-${SLUG}.pdf',
+              format: 'A4',
+              printBackground: true,
+              margin: { top: '0', right: '0', bottom: '0', left: '0' }
+            });
+            await browser.close();
+            console.log('PDF generated: campaigns/${SLUG}/propuesta-${SLUG}.pdf');
+          });
+          "
+
+      - name: Commit PDF to repo
+        run: |
+          SLUG=$(echo "${{ github.event.inputs.company }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+          git config user.email "rey@ai50m.com"
+          git config user.name "AI50M"
+          git add "campaigns/${SLUG}/"
+          git diff --staged --quiet || git commit -m "campaign: ${{ github.event.inputs.company }} — PDF"
+          git push
+
+      - name: Print campaign URLs
+        run: |
+          SLUG=$(echo "${{ github.event.inputs.company }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ CAMPAIGN READY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌐 Landing: https://miamisupportai-creator.github.io/auto-solution-downloader/campaigns/${SLUG}/"
+          echo "📄 PDF:     https://miamisupportai-creator.github.io/auto-solution-downloader/campaigns/${SLUG}/propuesta-${SLUG}.pdf"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
