@@ -1,61 +1,72 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { mkdirSync } from 'fs';
+/**
+ * daily-outreach.js — AI50M Outreach Engine v2
+ *
+ * Strategy:
+ *   1. Find businesses via Claude web_search
+ *   2. Validate contact BEFORE sending (WhatsApp > Email > Skip)
+ *   3. Only send if a valid channel exists
+ *   4. Dedup via data/searched-businesses.json
+ */
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import https from 'https';
 import http from 'http';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const WASENDER_API_KEY = process.env.WASENDER_API_KEY;
-const DRY_RUN = process.env.DRY_RUN === 'true';
-const DEDUP_PATH = 'data/searched-businesses.json';
+const WASENDER_API_KEY  = process.env.WASENDER_API_KEY;
+const SMARTLEAD_KEY     = process.env.SMARTLEAD_API_KEY || '';
+const DRY_RUN           = process.env.DRY_RUN === 'true';
+const DEDUP_PATH        = 'data/searched-businesses.json';
+
+// Miami-area valid codes (mobile and landline)
+const MIAMI_AREA_CODES = ['305', '786', '954', '561', '321', '407', '689', '754'];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function slugify(str) {
-  return String(str)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+  return String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-function httpGet(url) {
-  return new Promise((resolve) => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(url, { timeout: 8000 }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => resolve(data));
-    });
-    req.on('error', () => resolve(''));
-    req.on('timeout', () => { req.destroy(); resolve(''); });
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function httpGet(url, timeout = 8000) {
+  return new Promise(resolve => {
+    try {
+      const lib = url.startsWith('https') ? https : http;
+      const req = lib.get(url, { timeout }, res => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => resolve(d));
+      });
+      req.on('error', () => resolve(''));
+      req.on('timeout', () => { req.destroy(); resolve(''); });
+    } catch { resolve(''); }
   });
 }
 
 function httpPost(url, headers, body) {
-  return new Promise((resolve) => {
-    const bodyStr = JSON.stringify(body);
-    const urlObj = new URL(url);
-    const lib = urlObj.protocol === 'https:' ? https : http;
-    const options = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(bodyStr),
-        ...headers,
-      },
-      timeout: 30000,
-    };
-    const req = lib.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
-    });
-    req.on('error', (e) => resolve({ status: 0, body: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
-    req.write(bodyStr);
-    req.end();
+  return new Promise(resolve => {
+    try {
+      const data = JSON.stringify(body);
+      const u = new URL(url);
+      const lib = u.protocol === 'https:' ? https : http;
+      const req = lib.request({
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), ...headers },
+        timeout: 30000
+      }, res => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      });
+      req.on('error', e => resolve({ status: 0, body: e.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ status: 0, body: 'timeout' }); });
+      req.write(data);
+      req.end();
+    } catch (e) { resolve({ status: 0, body: e.message }); }
   });
 }
 
@@ -69,123 +80,172 @@ function stripHtml(html) {
     .slice(0, 2000);
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 // ── Dedup ─────────────────────────────────────────────────────────────────────
 
 function loadDedup() {
-  if (existsSync(DEDUP_PATH)) {
-    try {
-      return JSON.parse(readFileSync(DEDUP_PATH, 'utf8'));
-    } catch {
-      return {};
-    }
-  }
-  return {};
+  try { return existsSync(DEDUP_PATH) ? JSON.parse(readFileSync(DEDUP_PATH, 'utf8')) : {}; }
+  catch { return {}; }
 }
-
-function saveDedup(data) {
+function saveDedup(d) {
   if (!existsSync('data')) mkdirSync('data', { recursive: true });
-  writeFileSync(DEDUP_PATH, JSON.stringify(data, null, 2), 'utf8');
+  writeFileSync(DEDUP_PATH, JSON.stringify(d, null, 2), 'utf8');
 }
 
-// ── Claude: find businesses ───────────────────────────────────────────────────
+// ── STEP 1: Validate phone ────────────────────────────────────────────────────
+// Returns cleaned 11-digit US number or null if invalid
+
+function validatePhone(raw) {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, '');
+  // Must be 10 or 11 digits
+  if (digits.length === 10) {
+    const area = digits.slice(0, 3);
+    if (MIAMI_AREA_CODES.includes(area)) return '1' + digits;
+    return null; // Not Miami/FL
+  }
+  if (digits.length === 11 && digits[0] === '1') {
+    const area = digits.slice(1, 4);
+    if (MIAMI_AREA_CODES.includes(area)) return digits;
+    return null;
+  }
+  return null;
+}
+
+// ── STEP 2: Check if number has WhatsApp ─────────────────────────────────────
+// Returns true/false — sends a 0-byte probe and checks the API response
+
+async function checkWhatsApp(phone11) {
+  if (DRY_RUN) return true; // assume valid in dry run
+  const jid = `${phone11}@s.whatsapp.net`;
+  const res = await httpPost('https://www.wasenderapi.com/api/send-message',
+    { Authorization: `Bearer ${WASENDER_API_KEY}` },
+    { to: jid, text: '__probe__' }
+  );
+  try {
+    const b = JSON.parse(res.body);
+    if (b?.message?.includes('does not exist on WhatsApp')) return false;
+    return true; // success or any other error means number exists
+  } catch { return false; }
+}
+
+// ── STEP 3: Validate email ────────────────────────────────────────────────────
+
+function validateEmail(email) {
+  if (!email) return null;
+  const clean = String(email).trim().toLowerCase();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return clean;
+  return null;
+}
+
+// ── STEP 4: Find email via Claude if not in original data ─────────────────────
+
+async function findEmailForBusiness(company, website) {
+  const prompt = `Find the public contact email for this business. Search their website and Google.
+
+Company: ${company}
+Website: ${website || 'unknown'}
+
+Return ONLY the email address (e.g. info@company.com) or the word "none" if not found.`;
+
+  const res = await httpPost('https://api.anthropic.com/v1/messages',
+    { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-search-2025-03-05' },
+    {
+      model: 'claude-haiku-4-5',
+      max_tokens: 100,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+      messages: [{ role: 'user', content: prompt }]
+    }
+  );
+  if (res.status !== 200) return null;
+  try {
+    const parsed = JSON.parse(res.body);
+    const text = (parsed.content || []).find(b => b.type === 'text')?.text || '';
+    const match = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    return match ? match[0].toLowerCase() : null;
+  } catch { return null; }
+}
+
+// ── STEP 5: Find businesses ───────────────────────────────────────────────────
 
 async function findBusinesses(alreadySearched) {
-  const skipList = Object.keys(alreadySearched).join(', ') || 'ninguno';
-  const prompt = `Find the following Miami FL businesses for an outreach campaign. For each, return a JSON array.
+  const skipList = Object.keys(alreadySearched).slice(0, 80).join(', ') || 'none';
+
+  const prompt = `Search Google to find 50 real Miami FL businesses for outreach.
 
 Find:
-- 17 independent dental clinics in Miami FL (NOT chains like Aspen, Bright Now, Ideal Dental, ClearChoice)
-- 17 used/independent auto dealers in Miami FL (NOT CarMax, AutoNation franchises)
+- 17 independent dental clinics in Miami FL (NOT Aspen, ClearChoice, Bright Now chains)
+- 17 independent auto dealers in Miami FL (NOT CarMax, AutoNation)
 - 16 boutique hotels in Miami FL under 100 rooms (NOT major chains)
 
-Already searched (SKIP these completely): ${skipList}
+SKIP these (already contacted): ${skipList}
 
-Return ONLY a valid JSON array. Each object must have exactly these fields:
-{
-  "company": "Business Name",
+For each business find:
+1. Business name
+2. Website URL
+3. Phone number — PREFER mobile/WhatsApp-capable numbers. Include area code.
+4. Owner or manager first name (from website/Google/LinkedIn)
+5. Public email address (info@, contact@, owner@, etc.)
+
+Return ONLY a valid JSON array, no text before or after:
+[{
+  "company": "Name",
   "website": "https://...",
-  "phone": "+13055551234",
-  "owner_name": "Full Name or empty string",
-  "first_name": "First name or empty string",
+  "phone": "+1XXXXXXXXXX",
+  "owner_name": "Full Name or empty",
+  "first_name": "First or empty",
+  "email": "email@domain.com or empty",
   "niche": "dental|auto_dealer|boutique_hotel"
-}
+}]`;
 
-Rules:
-- Real businesses only, verifiable online
-- Phone in E.164 format (+1XXXXXXXXXX)
-- If owner unknown, use empty strings
-- Do NOT include businesses from the skip list
-- Return exactly 50 entries total (17+17+16)`;
-
-  const res = await httpPost(
-    'https://api.anthropic.com/v1/messages',
-    {
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'web-search-2025-03-05',
-    },
+  const res = await httpPost('https://api.anthropic.com/v1/messages',
+    { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'web-search-2025-03-05' },
     {
       model: 'claude-opus-4-5',
-      max_tokens: 4096,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 15 }],
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 5000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 20 }],
+      messages: [{ role: 'user', content: prompt }]
     }
   );
 
   if (res.status !== 200) {
-    console.error('Claude find-businesses error:', res.status, res.body.slice(0, 500));
+    console.error('Claude search error:', res.status, String(res.body).slice(0, 300));
     return [];
   }
 
-  let parsed;
   try {
-    parsed = JSON.parse(res.body);
-  } catch {
-    console.error('Failed to parse Claude response JSON');
-    return [];
-  }
-
-  // Extract text from content blocks
-  const textBlocks = (parsed.content || []).filter((b) => b.type === 'text');
-  for (const block of textBlocks) {
-    const match = block.text.match(/\[[\s\S]*\]/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]);
-      } catch {
-        continue;
+    const parsed = JSON.parse(res.body);
+    for (const block of (parsed.content || []).filter(b => b.type === 'text')) {
+      const match = block.text.match(/\[[\s\S]*?\]/);
+      if (match) {
+        try { return JSON.parse(match[0]); } catch { continue; }
       }
     }
-  }
-  console.error('No JSON array found in Claude response');
+  } catch (e) { console.error('Parse error:', e.message); }
   return [];
 }
 
-// ── Claude: generate message ──────────────────────────────────────────────────
+// ── STEP 6: Generate personalized message ────────────────────────────────────
 
-async function generateMessage(business, websiteText) {
-  const prompt = `You are an AI automation sales expert for AI50M, a Miami-based AI automation agency.
+async function generateMessage(biz, websiteText) {
+  const greeting = biz.first_name ? `Hola ${biz.first_name} 👋` : 'Hola 👋';
 
-Business info:
-- Company: ${business.company}
-- Niche: ${business.niche}
-- First name: ${business.first_name || '(unknown)'}
-- Website text: ${websiteText || '(not available)'}
+  const prompt = `You are a B2B sales expert for AI50M (Miami AI automation agency).
 
-Generate a personalized WhatsApp outreach message in SPANISH. Use EXACTLY this format:
+Business:
+- Company: ${biz.company}
+- Niche: ${biz.niche}
+- Website content: ${websiteText || '(not available)'}
 
-Hola ${business.first_name ? business.first_name : ''}${business.first_name ? ' 👋' : '👋'}
+Write a SHORT WhatsApp outreach message in SPANISH using EXACTLY this structure:
 
-Vi que ${business.company} [specific bottleneck detected from website or common to this niche].
+${greeting}
+
+Vi que ${biz.company} [1 specific operational bottleneck — be precise, not generic].
 
 Automatizamos eso:
-✓ [Benefit 1 quantified - hours saved per week]
-✓ [Benefit 2 quantified - $ saved per month]
-✓ [Benefit 3 - specific to ${business.niche} niche]
+✓ [Benefit 1 with specific number — e.g. "Ahorras 15h/semana en confirmaciones de citas"]
+✓ [Benefit 2 with $ amount — e.g. "$18,000+ anuales en eficiencia operacional"]
+✓ [Benefit 3 specific to ${biz.niche}]
 
 ¿Nos damos una llamada de 15 min?
 
@@ -193,183 +253,200 @@ Rey Martinez
 AI50M | Miami, FL
 rey@ai50m.com | 786-969-3419
 
-Rules:
-- NO links ever
-- Keep it under 200 words
-- Be specific to their niche
-- Sound human, not robotic
+RULES:
+- NO URLs or links ever
+- Under 180 words
+- Be specific to their business, not generic
+- Sound human
 
-Also return a JSON object on a new line after the message with this exact format:
-{"weeklyHours": <number>, "annualSavings": <number>, "painPoint": "<string>"}`;
+After the message, on a new line, add this JSON (no markdown):
+{"weeklyHours":N,"annualSavings":N,"painPoint":"short description"}`;
 
-  const res = await httpPost(
-    'https://api.anthropic.com/v1/messages',
-    {
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    {
-      model: 'claude-haiku-4-5',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    }
+  const res = await httpPost('https://api.anthropic.com/v1/messages',
+    { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    { model: 'claude-haiku-4-5', max_tokens: 800, messages: [{ role: 'user', content: prompt }] }
   );
 
-  if (res.status !== 200) {
-    console.error('Claude generate-message error:', res.status);
-    return { message: null, meta: {} };
-  }
-
-  let parsed;
+  if (res.status !== 200) return { message: null, meta: {} };
   try {
-    parsed = JSON.parse(res.body);
-  } catch {
-    return { message: null, meta: {} };
-  }
-
-  const text = (parsed.content || []).find((b) => b.type === 'text')?.text || '';
-
-  // Split message from meta JSON
-  const jsonMatch = text.match(/\{[\s\S]*"weeklyHours"[\s\S]*\}/);
-  let meta = {};
-  if (jsonMatch) {
-    try {
-      meta = JSON.parse(jsonMatch[0]);
-    } catch {}
-  }
-
-  // Remove the JSON line from the message
-  const message = text.replace(/\{[\s\S]*"weeklyHours"[\s\S]*\}/, '').trim();
-
-  return { message, meta };
+    const parsed = JSON.parse(res.body);
+    const text = (parsed.content || []).find(b => b.type === 'text')?.text || '';
+    const jsonMatch = text.match(/\{"weeklyHours"[\s\S]*?\}/);
+    const meta = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    const message = text.replace(/\{"weeklyHours"[\s\S]*?\}/, '').trim();
+    return { message, meta };
+  } catch { return { message: null, meta: {} }; }
 }
 
-// ── WhatsApp send ─────────────────────────────────────────────────────────────
+// ── STEP 7: Send WhatsApp ─────────────────────────────────────────────────────
 
-async function sendWhatsApp(phone, message) {
+async function sendWhatsApp(phone11, message) {
   if (DRY_RUN) {
-    console.log(`[DRY RUN] Would send to ${phone}:\n${message}\n`);
+    console.log(`  [DRY RUN] WhatsApp → ${phone11}\n${message}\n`);
     return 'dry_run';
   }
-
-  const to = phone.replace(/\D/g, '');
-  const jid = `${to}@s.whatsapp.net`;
-
-  const res = await httpPost(
-    'https://www.wasenderapi.com/api/send-message',
+  const res = await httpPost('https://www.wasenderapi.com/api/send-message',
     { Authorization: `Bearer ${WASENDER_API_KEY}` },
-    { to: jid, text: message }
+    { to: `${phone11}@s.whatsapp.net`, text: message }
   );
-
-  let body;
   try {
-    body = JSON.parse(res.body);
-  } catch {
-    body = { success: false, message: res.body };
-  }
-
-  if (body?.success === false && body?.message?.includes('does not exist on WhatsApp')) {
-    return 'no_whatsapp';
-  }
-  if (res.status >= 200 && res.status < 300 && body?.success !== false) {
-    return 'sent';
-  }
-  console.error(`WhatsApp send error (${res.status}):`, JSON.stringify(body).slice(0, 200));
-  return 'failed';
+    const b = JSON.parse(res.body);
+    if (b?.success) return 'sent';
+    return 'failed';
+  } catch { return 'failed'; }
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── STEP 8: Send Email via Smartlead ─────────────────────────────────────────
+
+async function sendEmail(email, company, message) {
+  if (!SMARTLEAD_KEY) { console.log('  ⚠️  No Smartlead key — skip email'); return 'no_key'; }
+  if (DRY_RUN) { console.log(`  [DRY RUN] Email → ${email}`); return 'dry_run'; }
+
+  // Convert WA message to email format
+  const subject = `Automatización IA para ${company} — AI50M`;
+  const body = message.replace(/✓/g, '•');
+
+  const res = await httpPost(`https://server.smartlead.ai/api/v1/campaigns/create?api_key=${SMARTLEAD_KEY}`,
+    {},
+    { name: `${company} — Outreach ${new Date().toISOString().split('T')[0]}` }
+  );
+
+  try {
+    const camp = JSON.parse(res.body);
+    if (!camp?.id) return 'failed';
+
+    // Add lead
+    await httpPost(`https://server.smartlead.ai/api/v1/campaigns/${camp.id}/leads?api_key=${SMARTLEAD_KEY}`,
+      {},
+      { lead_list: [{ email, company_name: company, custom_fields: { message: body } }] }
+    );
+
+    // Add sequence
+    await httpPost(`https://server.smartlead.ai/api/v1/campaigns/${camp.id}/sequences?api_key=${SMARTLEAD_KEY}`,
+      {},
+      { sequences: [{ seq_number: 1, seq_delay_details: { delay_in_days: 0 }, subject, email_body: `<p>${body.replace(/\n/g, '<br>')}</p>` }] }
+    );
+
+    return 'sent';
+  } catch { return 'failed'; }
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
 
 async function runDailyOutreach() {
-  console.log(`\n🚀 AI50M Daily Outreach — ${new Date().toISOString()}`);
-  if (DRY_RUN) console.log('⚠️  DRY RUN MODE — no WhatsApp messages will be sent\n');
+  console.log(`\n🚀 AI50M Daily Outreach v2 — ${new Date().toISOString()}`);
+  if (DRY_RUN) console.log('⚠️  DRY RUN — no real messages sent\n');
 
-  const searchedBusinesses = loadDedup();
-  console.log(`📋 Dedup loaded: ${Object.keys(searchedBusinesses).length} already searched\n`);
+  const dedup = loadDedup();
+  console.log(`📋 Dedup: ${Object.keys(dedup).length} already contacted\n`);
 
-  // Step 1: Find businesses
-  console.log('🔍 Searching for new businesses via Claude...');
-  const businesses = await findBusinesses(searchedBusinesses);
-  console.log(`✅ Found ${businesses.length} businesses\n`);
+  // Find businesses
+  console.log('🔍 Finding businesses via Claude web_search...');
+  const businesses = await findBusinesses(dedup);
+  console.log(`Found ${businesses.length} candidates\n`);
 
-  const stats = { found: businesses.length, sent: 0, no_whatsapp: 0, failed: 0, skipped: 0 };
+  const stats = { sent_wa: 0, sent_email: 0, no_whatsapp: 0, no_contact: 0, skipped: 0, errors: 0 };
 
   for (let i = 0; i < businesses.length && i < 50; i++) {
     const biz = businesses[i];
     const slug = slugify(biz.company);
 
-    if (searchedBusinesses[slug]) {
-      console.log(`⏭️  Skip (dedup): ${biz.company}`);
-      stats.skipped++;
-      continue;
+    if (dedup[slug]) { stats.skipped++; continue; }
+
+    console.log(`\n[${i+1}/${businesses.length}] ${biz.company} (${biz.niche})`);
+
+    // ── VALIDATE CONTACT ──────────────────────────────────────────────────────
+    const phone = validatePhone(biz.phone);
+    let email   = validateEmail(biz.email);
+    let channel = null;
+    let validPhone = null;
+
+    if (phone) {
+      console.log(`  📱 Phone validated: +${phone}`);
+      console.log(`  🔍 Checking WhatsApp...`);
+      const hasWA = await checkWhatsApp(phone);
+      if (hasWA) {
+        channel = 'whatsapp';
+        validPhone = phone;
+        console.log(`  ✅ WhatsApp confirmed`);
+      } else {
+        console.log(`  ❌ Not on WhatsApp`);
+        stats.no_whatsapp++;
+      }
+    } else if (biz.phone) {
+      console.log(`  ⚠️  Phone invalid or non-Miami: ${biz.phone}`);
     }
 
-    console.log(`\n[${i + 1}/${businesses.length}] ${biz.company} (${biz.niche})`);
+    // Fallback to email if no WhatsApp
+    if (!channel) {
+      if (!email) {
+        console.log(`  🔍 Searching for email...`);
+        email = await findEmailForBusiness(biz.company, biz.website);
+      }
+      if (email) {
+        channel = 'email';
+        console.log(`  📧 Email found: ${email}`);
+      } else {
+        console.log(`  ⛔ No valid contact → SKIP`);
+        stats.no_contact++;
+        dedup[slug] = new Date().toISOString().split('T')[0];
+        saveDedup(dedup);
+        continue;
+      }
+    }
 
-    // Scrape website
+    // ── SCRAPE WEBSITE ────────────────────────────────────────────────────────
     let websiteText = '';
     if (biz.website) {
-      console.log(`  🌐 Scraping ${biz.website}`);
       const html = await httpGet(biz.website);
       websiteText = stripHtml(html);
     }
 
-    // Generate message
+    // ── GENERATE MESSAGE ──────────────────────────────────────────────────────
     console.log(`  ✍️  Generating message...`);
     const { message, meta } = await generateMessage(biz, websiteText);
-
     if (!message) {
-      console.log(`  ❌ Failed to generate message`);
-      stats.failed++;
-      searchedBusinesses[slug] = new Date().toISOString().split('T')[0];
+      console.log(`  ❌ Message generation failed`);
+      stats.errors++;
+      dedup[slug] = new Date().toISOString().split('T')[0];
+      saveDedup(dedup);
       continue;
     }
 
-    console.log(`  📊 Pain point: ${meta.painPoint || 'N/A'} | Hours/wk: ${meta.weeklyHours || 'N/A'} | Savings/yr: $${meta.annualSavings || 'N/A'}`);
+    console.log(`  💡 ${meta.painPoint || 'Pain point analyzed'} | ${meta.weeklyHours || '?'}h/wk | $${(meta.annualSavings || 0).toLocaleString()}/yr`);
 
-    // Send WhatsApp
-    if (biz.phone) {
-      console.log(`  📱 Sending to ${biz.phone}...`);
-      const result = await sendWhatsApp(biz.phone, message);
-      console.log(`  ${result === 'sent' || result === 'dry_run' ? '✅' : '❌'} Status: ${result}`);
-
-      if (result === 'sent' || result === 'dry_run') stats.sent++;
-      else if (result === 'no_whatsapp') stats.no_whatsapp++;
-      else stats.failed++;
+    // ── SEND ──────────────────────────────────────────────────────────────────
+    if (channel === 'whatsapp') {
+      const result = await sendWhatsApp(validPhone, message);
+      console.log(`  📤 WhatsApp: ${result}`);
+      if (result === 'sent' || result === 'dry_run') stats.sent_wa++;
+      else stats.errors++;
     } else {
-      console.log(`  ⚠️  No phone number available`);
-      stats.failed++;
+      const result = await sendEmail(email, biz.company, message);
+      console.log(`  📤 Email: ${result}`);
+      if (result === 'sent' || result === 'dry_run') stats.sent_email++;
+      else stats.errors++;
     }
 
-    // Dedup
-    searchedBusinesses[slug] = new Date().toISOString().split('T')[0];
-    saveDedup(searchedBusinesses);
-
-    // Rate limit
-    if (i < businesses.length - 1) await sleep(2000);
+    dedup[slug] = new Date().toISOString().split('T')[0];
+    saveDedup(dedup);
+    await sleep(2500);
   }
 
-  // Summary
   console.log('\n' + '═'.repeat(50));
-  console.log('📊 OUTREACH SUMMARY');
+  console.log('📊 DAILY OUTREACH SUMMARY');
   console.log('═'.repeat(50));
-  console.log(`  Found:       ${stats.found}`);
-  console.log(`  Sent:        ${stats.sent}`);
-  console.log(`  No WhatsApp: ${stats.no_whatsapp}`);
-  console.log(`  Failed:      ${stats.failed}`);
-  console.log(`  Skipped:     ${stats.skipped}`);
+  console.log(`  WhatsApp sent:  ${stats.sent_wa}`);
+  console.log(`  Email sent:     ${stats.sent_email}`);
+  console.log(`  No WhatsApp:    ${stats.no_whatsapp}`);
+  console.log(`  No contact:     ${stats.no_contact}`);
+  console.log(`  Skipped (dup):  ${stats.skipped}`);
+  console.log(`  Errors:         ${stats.errors}`);
   console.log('═'.repeat(50) + '\n');
-
-  saveDedup(searchedBusinesses);
+  saveDedup(dedup);
 }
 
-// CLI entry
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-if (isMain) {
-  runDailyOutreach().catch((err) => {
-    console.error('Fatal error:', err);
-    process.exit(1);
-  });
-}
+if (isMain) runDailyOutreach().catch(e => { console.error('Fatal:', e); process.exit(1); });
 
 export { runDailyOutreach };
