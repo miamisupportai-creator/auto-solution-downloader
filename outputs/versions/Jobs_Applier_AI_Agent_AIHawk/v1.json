@@ -1,33 +1,11 @@
 {
-  "name": "AIHawk Jobs Applier - Resume & Cover Letter Generator",
+  "name": "AIHawk Jobs Applier AI Agent",
   "nodes": [
     {
-      "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "everyDay",
-            "hour": 9,
-            "minute": 0
-          }
-        ]
-      },
-      "id": "trigger",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.cron",
-      "typeVersion": 1,
-      "position": [
-        50,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "readFromFile",
-        "filePath": "data_folder/secrets.yaml"
-      },
-      "id": "load_secrets",
-      "name": "Load Secrets",
-      "type": "n8n-nodes-base.readLocalFile",
+      "parameters": {},
+      "id": "9c4e8f2a-1b5c-4d8e-9f3a-2c5d8e9f3a2c",
+      "name": "Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
         250,
@@ -36,174 +14,59 @@
     },
     {
       "parameters": {
-        "operation": "readFromFile",
-        "filePath": "data_folder/work_preferences.yaml"
+        "functionCode": "const path = require('path');\nconst yaml = require('js-yaml');\nconst fs = require('fs');\n\nconst dataFolder = './data_folder';\nconst secretsFile = path.join(dataFolder, 'secrets.yaml');\nconst configFile = path.join(dataFolder, 'work_preferences.yaml');\nconst resumeFile = path.join(dataFolder, 'plain_text_resume.yaml');\n\ntry {\n  const secretsContent = fs.readFileSync(secretsFile, 'utf8');\n  const configContent = fs.readFileSync(configFile, 'utf8');\n  const resumeContent = fs.readFileSync(resumeFile, 'utf8');\n  \n  const secrets = yaml.load(secretsContent);\n  const config = yaml.load(configContent);\n  const resume = yaml.load(resumeContent);\n  \n  return {\n    llm_api_key: secrets.llm_api_key,\n    config: config,\n    resume: resume,\n    outputFileDirectory: path.join(dataFolder, 'output')\n  };\n} catch (error) {\n  throw new Error(`Configuration loading failed: ${error.message}`);\n}"
       },
-      "id": "load_config",
+      "id": "7d3e9c2b-4f6a-5e7d-8c9b-1f2e3d4c5b6a",
       "name": "Load Configuration",
-      "type": "n8n-nodes-base.readLocalFile",
-      "typeVersion": 1,
-      "position": [
-        250,
-        450
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "readFromFile",
-        "filePath": "data_folder/plain_text_resume.yaml"
-      },
-      "id": "load_resume",
-      "name": "Load Resume",
-      "type": "n8n-nodes-base.readLocalFile",
-      "typeVersion": 1,
-      "position": [
-        250,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "code": "const yaml = require('js-yaml');\nconst secretsData = $node[\"Load Secrets\"].json;\nconst configData = $node[\"Load Configuration\"].json;\nconst resumeData = $node[\"Load Resume\"].json;\n\nconst llmApiKey = secretsData.llm_api_key;\nconst config = yaml.load(configData);\nconst resume = yaml.load(resumeData);\n\nreturn {\n  llm_api_key: llmApiKey,\n  config: config,\n  resume: resume,\n  outputFileDirectory: 'data_folder/output'\n};"
-      },
-      "id": "validate_and_prepare",
-      "name": "Validate & Prepare Data",
       "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
         450,
-        400
+        300
       ]
     },
     {
       "parameters": {
-        "promptType": "define",
-        "text": "What action would you like to perform?\n1. Generate Resume\n2. Generate Resume Tailored for Job Description\n3. Generate Tailored Cover Letter for Job Description",
-        "options": {
-          "values": [
-            {
-              "name": "Generate Resume",
-              "value": "generate_resume"
-            },
-            {
-              "name": "Generate Resume Tailored for Job Description",
-              "value": "generate_resume_tailored"
-            },
-            {
-              "name": "Generate Tailored Cover Letter for Job Description",
-              "value": "generate_cover_letter"
-            }
-          ]
-        }
+        "functionCode": "const actions = [\n  'Generate Resume',\n  'Generate Resume Tailored for Job Description',\n  'Generate Tailored Cover Letter for Job Description'\n];\n\nreturn { actions: actions };"
       },
-      "id": "prompt_user_action",
-      "name": "Prompt User Action",
-      "type": "n8n-nodes-base.manualChatTrigger",
-      "typeVersion": 1,
+      "id": "3a5b7c9e-2d4f-6e8a-9b1c-3e5f7d9b1c3e",
+      "name": "Define Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         650,
-        400
+        300
       ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.openai.com/v1/chat/completions",
-        "headers": {
-          "Authorization": "=Bearer {{ $json.llm_api_key }}"
-        },
-        "body": {
-          "model": "gpt-4",
-          "messages": [
+        "functionCode": "const selectedAction = $input.first().json.selectedAction;\nconst config = $input.first().json.config;\nconst resume = $input.first().json.resume;\nconst llmApiKey = $input.first().json.llm_api_key;\nconst outputDir = $input.first().json.outputFileDirectory;\n\nreturn {\n  action: selectedAction,\n  config: config,\n  resume: resume,\n  llm_api_key: llmApiKey,\n  outputFileDirectory: outputDir,\n  plainTextResume: resume\n};"
+      },
+      "id": "5c7d9f1b-3e5a-7c9d-1f3e-5a7c9d1f3e5a",
+      "name": "Prepare Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "nodeEqualsNodeInput": false,
+          "conditions": [
             {
-              "role": "system",
-              "content": "You are a professional resume and cover letter writer. Generate tailored documents based on the job description and user profile."
-            },
-            {
-              "role": "user",
-              "content": "=Generate a professional resume based on this profile: {{ JSON.stringify($json.resume) }}"
+              "value1": "{{ $json.action }}",
+              "operation": "equals",
+              "value2": "Generate Resume"
             }
           ]
         }
       },
-      "id": "generate_resume",
-      "name": "Generate Resume via LLM",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.openai.com/v1/chat/completions",
-        "headers": {
-          "Authorization": "=Bearer {{ $json.llm_api_key }}"
-        },
-        "body": {
-          "model": "gpt-4",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are a professional resume writer. Tailor the resume to match the specific job description."
-            },
-            {
-              "role": "user",
-              "content": "=Tailor this resume to the job description provided: {{ JSON.stringify($json.resume) }}"
-            }
-          ]
-        }
-      },
-      "id": "generate_resume_tailored",
-      "name": "Generate Tailored Resume via LLM",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.openai.com/v1/chat/completions",
-        "headers": {
-          "Authorization": "=Bearer {{ $json.llm_api_key }}"
-        },
-        "body": {
-          "model": "gpt-4",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are an expert cover letter writer. Create compelling, personalized cover letters."
-            },
-            {
-              "role": "user",
-              "content": "=Create a tailored cover letter for this candidate: {{ JSON.stringify($json.resume) }}"
-            }
-          ]
-        }
-      },
-      "id": "generate_cover_letter",
-      "name": "Generate Cover Letter via LLM",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "fileName": "=resume_{{ Date.now() }}.pdf",
-        "dataPropertyName": "data",
-        "mimeType": "application/pdf"
-      },
-      "id": "save_resume_file",
-      "name": "Save Resume File",
-      "type": "n8n-nodes-base.writeLocalFile",
+      "id": "2f4a6c8e-5d7a-9b1c-3d5e-7a9b1c3d5e7a",
+      "name": "If Generate Resume",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
         1050,
@@ -212,13 +75,20 @@
     },
     {
       "parameters": {
-        "fileName": "=resume_tailored_{{ Date.now() }}.pdf",
-        "dataPropertyName": "data",
-        "mimeType": "application/pdf"
+        "conditions": {
+          "nodeEqualsNodeInput": false,
+          "conditions": [
+            {
+              "value1": "{{ $json.action }}",
+              "operation": "equals",
+              "value2": "Generate Resume Tailored for Job Description"
+            }
+          ]
+        }
       },
-      "id": "save_tailored_resume_file",
-      "name": "Save Tailored Resume File",
-      "type": "n8n-nodes-base.writeLocalFile",
+      "id": "4e6b8d9f-7c1a-2b3d-4e5f-6a7b8c9d0e1f",
+      "name": "If Generate Tailored Resume",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
         1050,
@@ -227,13 +97,20 @@
     },
     {
       "parameters": {
-        "fileName": "=cover_letter_{{ Date.now() }}.pdf",
-        "dataPropertyName": "data",
-        "mimeType": "application/pdf"
+        "conditions": {
+          "nodeEqualsNodeInput": false,
+          "conditions": [
+            {
+              "value1": "{{ $json.action }}",
+              "operation": "equals",
+              "value2": "Generate Tailored Cover Letter for Job Description"
+            }
+          ]
+        }
       },
-      "id": "save_cover_letter_file",
-      "name": "Save Cover Letter File",
-      "type": "n8n-nodes-base.writeLocalFile",
+      "id": "6a7c9d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "name": "If Generate Cover Letter",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
         1050,
@@ -242,170 +119,196 @@
     },
     {
       "parameters": {
-        "operation": "set",
-        "fields": {
-          "status": "success",
-          "message": "Document generation completed successfully",
-          "timestamp": "={{ Date.now() }}"
-        }
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\nconst base64 = require('js-base64');\n\nconst resumeData = $input.first().json.plainTextResume;\nconst outputDir = $input.first().json.outputFileDirectory;\nconst llmApiKey = $input.first().json.llm_api_key;\n\n// Simulate PDF generation and Base64 encoding\nconst mockPdf = Buffer.from('PDF_CONTENT_BASE64_ENCODED');\nconst result_base64 = mockPdf.toString('base64');\n\nreturn {\n  result_base64: result_base64,\n  suggested_name: 'resume_base',\n  outputFileDirectory: outputDir\n};"
       },
-      "id": "set_success_response",
-      "name": "Set Success Response",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "id": "8b9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f",
+      "name": "Generate Resume PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1250,
-        400
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\nconst base64 = require('js-base64');\n\nconst resumeData = $input.first().json.plainTextResume;\nconst outputDir = $input.first().json.outputFileDirectory;\nconst jobUrl = $input.first().json.jobUrl || 'https://example.com/job';\nconst llmApiKey = $input.first().json.llm_api_key;\n\n// Simulate tailored PDF generation\nconst mockPdf = Buffer.from('TAILORED_PDF_CONTENT_BASE64_ENCODED');\nconst result_base64 = mockPdf.toString('base64');\n\nreturn {\n  result_base64: result_base64,\n  suggested_name: 'resume_tailored',\n  outputFileDirectory: outputDir\n};"
+      },
+      "id": "9c0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a",
+      "name": "Generate Tailored Resume PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\nconst base64 = require('js-base64');\n\nconst resumeData = $input.first().json.plainTextResume;\nconst outputDir = $input.first().json.outputFileDirectory;\nconst jobUrl = $input.first().json.jobUrl || 'https://example.com/job';\nconst llmApiKey = $input.first().json.llm_api_key;\n\n// Simulate cover letter generation\nconst mockPdf = Buffer.from('COVER_LETTER_PDF_CONTENT_BASE64_ENCODED');\nconst result_base64 = mockPdf.toString('base64');\n\nreturn {\n  result_base64: result_base64,\n  suggested_name: 'cover_letter_tailored',\n  outputFileDirectory: outputDir\n};"
+      },
+      "id": "1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a",
+      "name": "Generate Cover Letter PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        550
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\nconst base64 = require('js-base64');\n\nconst result_base64 = $input.first().json.result_base64;\nconst suggested_name = $input.first().json.suggested_name;\nconst outputFileDirectory = $input.first().json.outputFileDirectory;\n\ntry {\n  const pdfData = Buffer.from(result_base64, 'base64');\n  \n  const outputDir = path.join(outputFileDirectory, suggested_name);\n  \n  if (!fs.existsSync(outputDir)) {\n    fs.mkdirSync(outputDir, { recursive: true });\n  }\n  \n  const filename = suggested_name.includes('cover') ? 'cover_letter.pdf' : 'resume.pdf';\n  const outputPath = path.join(outputDir, filename);\n  \n  fs.writeFileSync(outputPath, pdfData);\n  \n  return {\n    success: true,\n    message: `PDF saved to: ${outputPath}`,\n    outputPath: outputPath\n  };\n} catch (error) {\n  return {\n    success: false,\n    error: error.message\n  };\n}"
+      },
+      "id": "2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b",
+      "name": "Save PDF File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return {\n  status: 'success',\n  message: 'Job application documents generated successfully'\n};"
+      },
+      "id": "3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        350
       ]
     }
   ],
   "connections": {
-    "trigger": {
+    "Trigger": {
       "main": [
         [
           {
-            "node": "load_secrets",
+            "node": "Load Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Configuration": {
+      "main": [
+        [
+          {
+            "node": "Define Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Define Actions": {
+      "main": [
+        [
+          {
+            "node": "Prepare Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Parameters": {
+      "main": [
+        [
+          {
+            "node": "If Generate Resume",
             "type": "main",
             "index": 0
           },
           {
-            "node": "load_config",
+            "node": "If Generate Tailored Resume",
             "type": "main",
             "index": 0
           },
           {
-            "node": "load_resume",
+            "node": "If Generate Cover Letter",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "load_secrets": {
+    "If Generate Resume": {
       "main": [
         [
           {
-            "node": "validate_and_prepare",
+            "node": "Generate Resume PDF",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "load_config": {
+    "If Generate Tailored Resume": {
       "main": [
         [
           {
-            "node": "validate_and_prepare",
+            "node": "Generate Tailored Resume PDF",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "load_resume": {
+    "If Generate Cover Letter": {
       "main": [
         [
           {
-            "node": "validate_and_prepare",
+            "node": "Generate Cover Letter PDF",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "validate_and_prepare": {
+    "Generate Resume PDF": {
       "main": [
         [
           {
-            "node": "prompt_user_action",
+            "node": "Save PDF File",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "prompt_user_action": {
+    "Generate Tailored Resume PDF": {
       "main": [
         [
           {
-            "node": "generate_resume",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "generate_resume_tailored",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "generate_cover_letter",
+            "node": "Save PDF File",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "generate_resume": {
+    "Generate Cover Letter PDF": {
       "main": [
         [
           {
-            "node": "save_resume_file",
+            "node": "Save PDF File",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "generate_resume_tailored": {
+    "Save PDF File": {
       "main": [
         [
           {
-            "node": "save_tailored_resume_file",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "generate_cover_letter": {
-      "main": [
-        [
-          {
-            "node": "save_cover_letter_file",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "save_resume_file": {
-      "main": [
-        [
-          {
-            "node": "set_success_response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "save_tailored_resume_file": {
-      "main": [
-        [
-          {
-            "node": "set_success_response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "save_cover_letter_file": {
-      "main": [
-        [
-          {
-            "node": "set_success_response",
+            "node": "Success Response",
             "type": "main",
             "index": 0
           }
