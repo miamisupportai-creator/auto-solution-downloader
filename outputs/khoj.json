@@ -1,127 +1,161 @@
 {
-  "name": "Khoj Desktop File Synchronization",
+  "name": "Khoj Desktop File Sync Workflow",
   "nodes": [
     {
       "parameters": {
-        "unit": "minutes",
-        "value": 10
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyMinutes",
+              "value": 10
+            }
+          ]
+        }
       },
-      "name": "Schedule Sync",
-      "type": "n8n-nodes-base.interval",
+      "id": "trigger-sync",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.trigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst textFileTypes = ['org', 'md', 'markdown', 'txt', 'html', 'xml', 'appleplist', 'asm', 'asp', 'batch', 'c', 'cs', 'css', 'csv', 'eml', 'go', 'ini', 'internetshortcut', 'java', 'javascript', 'json', 'latex', 'lisp', 'makefile', 'mht', 'mum', 'pem', 'perl', 'php', 'powershell', 'python', 'rdf', 'rst', 'rtf', 'ruby', 'rust', 'scala', 'shell', 'smali', 'sql', 'svg', 'symlinktext', 'vba', 'winregistry', 'yaml'];\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst validFileTypes = textFileTypes.concat(binaryFileTypes);\n\nfunction isSupportedFileType(filePath) {\n  const fileExtension = filePath.split('.').pop().toLowerCase();\n  return validFileTypes.includes(fileExtension);\n}\n\nfunction processDirectory(filesToPush, folder) {\n  try {\n    const files = fs.readdirSync(folder, { withFileTypes: true });\n    for (const file of files) {\n      if (file.name.startsWith('.')) continue;\n      const filePath = path.join(file.path || folder, file.name);\n      if (file.isFile() && isSupportedFileType(filePath)) {\n        filesToPush.push(filePath);\n      }\n      if (file.isDirectory()) {\n        processDirectory(filesToPush, filePath);\n      }\n    }\n  } catch (err) {\n    console.error(`Error reading directory: ${err.message}`);\n  }\n}\n\nconst files = $input.first().json.files || [];\nconst folders = $input.first().json.folders || [];\nlet filesToPush = [];\n\nfor (const file of files) {\n  if (fs.existsSync(file.path)) {\n    filesToPush.push(file.path);\n  }\n}\n\nfor (const folder of folders) {\n  if (fs.existsSync(folder.path)) {\n    processDirectory(filesToPush, folder.path);\n  }\n}\n\nreturn { filesToPush, lastSync: $input.first().json.lastSync || [] };"
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst textFileTypes = [\n  'org', 'md', 'markdown', 'txt', 'html', 'xml',\n  'appleplist', 'asm', 'asp', 'batch', 'c', 'cs', 'css', 'csv', 'eml', 'go', 'html', 'ini', 'internetshortcut', 'java', 'javascript', 'json', 'latex', 'lisp', 'makefile', 'markdown', 'mht', 'mum', 'pem', 'perl', 'php', 'powershell', 'python', 'rdf', 'rst', 'rtf', 'ruby', 'rust', 'scala', 'shell', 'smali', 'sql', 'svg', 'symlinktext', 'txt', 'vba', 'winregistry', 'xml', 'yaml'\n];\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst validFileTypes = textFileTypes.concat(binaryFileTypes);\n\nfunction isSupportedFileType(filePath) {\n  const fileExtension = filePath.split('.').pop().toLowerCase();\n  return validFileTypes.includes(fileExtension);\n}\n\nfunction processDirectory(filesToPush, folderPath) {\n  try {\n    const files = fs.readdirSync(folderPath, { withFileTypes: true });\n    for (const file of files) {\n      if (file.name.startsWith('.')) continue;\n      const filePath = path.join(folderPath, file.name);\n      if (file.isFile() && isSupportedFileType(filePath)) {\n        filesToPush.push(filePath);\n      } else if (file.isDirectory()) {\n        processDirectory(filesToPush, filePath);\n      }\n    }\n  } catch (err) {\n    console.error(`Error reading directory ${folderPath}:`, err.message);\n  }\n}\n\nconst files = $input.getNodeParameter('files') || [];\nconst folders = $input.getNodeParameter('folders') || [];\nlet filesToPush = [];\n\nfor (const file of files) {\n  if (fs.existsSync(file.path)) {\n    filesToPush.push(file.path);\n  }\n}\n\nfor (const folder of folders) {\n  if (fs.existsSync(folder.path)) {\n    processDirectory(filesToPush, folder.path);\n  }\n}\n\nreturn { filesToPush };"
       },
+      "id": "collect-files",
       "name": "Collect Files",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "nodeCredentialType": "none"
+      }
     },
     {
       "parameters": {
-        "jsCode": "const fs = require('fs');\n\nconst filesToPush = $input.first().json.filesToPush;\nconst lastSync = $input.first().json.lastSync;\nconst regenerate = $input.first().json.regenerate || false;\n\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst filesDataToPush = [];\nconst state = { completed: true };\n\nfor (const file of filesToPush) {\n  try {\n    const stats = fs.statSync(file);\n    if (!regenerate) {\n      const lastSyncEntry = lastSync.find(s => s.path === file);\n      if (lastSyncEntry && stats.mtime.toISOString() < lastSyncEntry.datetime) {\n        continue;\n      }\n    }\n    \n    const encoding = binaryFileTypes.includes(file.split('.').pop()) ? 'binary' : 'utf8';\n    const fileContent = fs.readFileSync(file, { encoding });\n    filesDataToPush.push({\n      path: file,\n      content: fileContent,\n      encoding: encoding\n    });\n    state[file] = { success: true };\n  } catch (err) {\n    state[file] = { success: false, error: err.message };\n  }\n}\n\n// Mark deleted files\nfor (const syncedFile of lastSync) {\n  if (!filesToPush.includes(syncedFile.path)) {\n    filesDataToPush.push({\n      path: syncedFile.path,\n      content: '',\n      deleted: true\n    });\n  }\n}\n\nreturn { filesDataToPush, state };"
+        "functionCode": "const fs = require('fs');\n\nfunction filenameToMimeType(filename) {\n  const extension = filename.split('.').pop();\n  const mimeMap = {\n    'pdf': 'application/pdf',\n    'png': 'image/png',\n    'jpg': 'image/jpeg',\n    'jpeg': 'image/jpeg',\n    'webp': 'image/webp',\n    'md': 'text/markdown',\n    'markdown': 'text/markdown',\n    'org': 'text/org'\n  };\n  return mimeMap[extension] || 'text/plain';\n}\n\nconst filesToPush = $input.getNodeParameter('filesToPush') || [];\nconst lastSync = $input.getNodeParameter('lastSync') || [];\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\n\nconst filesDataToPush = [];\n\nfor (const filePath of filesToPush) {\n  try {\n    const stats = fs.statSync(filePath);\n    const lastSyncEntry = lastSync.find(f => f.path === filePath);\n    \n    if (lastSyncEntry && stats.mtime.toISOString() < lastSyncEntry.datetime) {\n      continue;\n    }\n\n    const encoding = binaryFileTypes.includes(filePath.split('.').pop()) ? 'binary' : 'utf8';\n    const fileContent = fs.readFileSync(filePath, { encoding });\n    const mimeType = filenameToMimeType(filePath);\n\n    filesDataToPush.push({\n      path: filePath,\n      content: fileContent,\n      mimeType: mimeType,\n      encoding: encoding\n    });\n  } catch (err) {\n    console.error(`Error processing file ${filePath}:`, err.message);\n  }\n}\n\nreturn { filesDataToPush };"
       },
+      "id": "prepare-file-data",
       "name": "Prepare File Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $json.hostURL }}/api/content?client=desktop",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth",
+        "url": "={{ $env.KHOJ_HOST || 'http://localhost:42110' }}/api/content?client=desktop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "bearerToken",
         "sendBody": true,
-        "bodyParametersUi": "keyValue",
-        "bodyParameters": []
+        "bodyContentType": "form-data",
+        "formData": {
+          "attachments": {
+            "attachmentProperties": [
+              {
+                "key": "files",
+                "value": "=filesDataToPush"
+              }
+            ]
+          }
+        }
       },
+      "id": "sync-to-khoj",
       "name": "Sync Files to Khoj",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [850, 300]
+      "position": [
+        850,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": "khoj_api_key"
+      }
     },
     {
       "parameters": {
-        "jsCode": "const filesDataToPush = $input.first().json.filesDataToPush;\nconst response = $input.previous().json;\n\nconst lastSync = filesDataToPush\n  .filter(f => !f.deleted && response.includes(f.path))\n  .map(f => ({\n    path: f.path,\n    datetime: new Date().toISOString()\n  }));\n\nreturn { lastSync, success: true };"
+        "functionCode": "const now = new Date().toISOString();\nconst filesToPush = $input.getNodeParameter('filesToPush') || [];\n\nconst lastSync = filesToPush.map(filePath => ({\n  path: filePath,\n  datetime: now\n}));\n\nreturn { lastSync };"
       },
-      "name": "Update Last Sync",
+      "id": "update-sync-timestamp",
+      "name": "Update Sync Timestamp",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1050, 300]
+      "position": [
+        1050,
+        300
+      ]
     },
     {
-      "parameters": {
-        "jsCode": "return {\n  message: 'Sync completed successfully',\n  timestamp: new Date().toISOString()\n};"
-      },
-      "name": "Log Success",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1250, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "const error = $input.first().json.error || 'Unknown error';\nreturn {\n  message: 'Sync failed',\n  error: error,\n  timestamp: new Date().toISOString()\n};"
-      },
-      "name": "Handle Sync Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1050, 500]
+      "parameters": {},
+      "id": "sync-complete",
+      "name": "Sync Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        300
+      ]
     }
   ],
   "connections": {
-    "Schedule Sync": {
+    "trigger-sync": {
       "main": [
         [
           {
-            "node": "Collect Files",
+            "node": "collect-files",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Collect Files": {
+    "collect-files": {
       "main": [
         [
           {
-            "node": "Prepare File Data",
+            "node": "prepare-file-data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Prepare File Data": {
+    "prepare-file-data": {
       "main": [
         [
           {
-            "node": "Sync Files to Khoj",
+            "node": "sync-to-khoj",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Sync Files to Khoj": {
+    "sync-to-khoj": {
       "main": [
         [
           {
-            "node": "Update Last Sync",
+            "node": "update-sync-timestamp",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Last Sync": {
+    "update-sync-timestamp": {
       "main": [
         [
           {
-            "node": "Log Success",
+            "node": "sync-complete",
             "type": "main",
             "index": 0
           }
@@ -129,7 +163,13 @@
       ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
-  }
+  },
+  "versionId": "6b3d6ba0-0c97-4edb-9b5d-f8c8f2b8c3d4",
+  "meta": {
+    "instanceId": "6b3d6ba0-0c97-4edb-9b5d-f8c8f2b8c3d4"
+  },
+  "tags": []
 }
