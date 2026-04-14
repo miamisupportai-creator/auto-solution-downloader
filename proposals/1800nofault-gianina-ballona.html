@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI50M Proposal — 1-800-NO-FAULT</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;line-height:1.6}
+.header{background:linear-gradient(135deg,#0a0a0a 0%,#001a1a 100%);padding:48px 40px;border-bottom:2px solid #00e5ff}
+.logo{font-size:32px;font-weight:800;color:#00e5ff;letter-spacing:-1px;margin-bottom:20px}
+h1{font-size:28px;font-weight:700;margin:12px 0 6px}
+.subtitle{color:#00e5ff;font-size:13px;text-transform:uppercase;letter-spacing:2px}
+.meta{color:#666;font-size:13px;margin-top:8px}
+.section{padding:40px;border-bottom:1px solid #ffffff11}
+.section h2{font-size:15px;font-weight:700;color:#00e5ff;margin-bottom:20px;text-transform:uppercase;letter-spacing:2px}
+.card{background:#111;border:1px solid #ffffff15;border-radius:12px;padding:24px;margin-bottom:16px}
+.challenge-item{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;padding:14px;background:#1a0800;border-left:3px solid #ff6600;border-radius:6px;font-size:15px}
+.solution-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.solution-card{background:#001a0d;border:1px solid #00e5ff33;border-radius:12px;padding:24px}
+.solution-card h3{color:#00e5ff;font-size:16px;margin-bottom:10px}
+.impact{display:inline-block;background:#00e5ff15;color:#00e5ff;padding:4px 12px;border-radius:20px;font-size:12px;margin-top:12px;border:1px solid #00e5ff33}
+.auto-area{display:flex;margin-bottom:16px;background:#111;border-radius:12px;overflow:hidden}
+.auto-hours{background:#001a0d;padding:20px;width:110px;flex-shrink:0;text-align:center;border-right:1px solid #00e5ff22;display:flex;flex-direction:column;justify-content:center}
+.hours-num{font-size:34px;font-weight:800;color:#00e5ff}
+.hours-label{color:#555;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.auto-content{padding:20px;flex:1}
+.auto-content h3{font-size:15px;margin-bottom:8px}
+.before{color:#ff6644;font-size:13px;margin-bottom:4px}
+.after{color:#00e5ff;font-size:13px}
+.roi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.roi-card{background:#00102a;border:1px solid #0088ff33;border-radius:12px;padding:24px;text-align:center}
+.roi-number{font-size:40px;font-weight:800;color:#00aaff;line-height:1}
+.roi-label{color:#666;font-size:13px;margin-top:8px}
+.roi-card.wide{grid-column:1/-1;background:#001a0d;border-color:#00e5ff33}
+.roi-card.wide .roi-number{color:#00e5ff;font-size:22px;line-height:1.3}
+.case-box{background:#0a0014;border:1px solid #7744ff33;border-radius:12px;padding:28px}
+.case-box h3{color:#9966ff;font-size:14px;margin-bottom:16px;text-transform:uppercase;letter-spacing:1px}
+.case-row{display:flex;gap:16px;margin-bottom:12px;align-items:flex-start}
+.case-tag{background:#7744ff22;color:#9966ff;padding:4px 10px;border-radius:20px;font-size:11px;white-space:nowrap;flex-shrink:0;margin-top:2px}
+.timeline-item{display:flex;gap:16px;margin-bottom:14px;padding:16px;background:#111;border-radius:10px;align-items:flex-start}
+.phase-tag{background:#00e5ff15;color:#00e5ff;padding:6px 14px;border-radius:20px;font-size:12px;white-space:nowrap;border:1px solid #00e5ff33;flex-shrink:0}
+.invest-box{background:#001a0d;border:1px solid #00e5ff44;border-radius:12px;padding:28px}
+.price{font-size:36px;font-weight:800;color:#00e5ff;margin-bottom:8px}
+.cta-section{background:linear-gradient(135deg,#001a1a,#000d1a);padding:60px 40px;text-align:center}
+.cta-section h2{font-size:32px;margin-bottom:12px}
+.cta-btn{display:inline-block;background:#00e5ff;color:#000;font-weight:800;padding:18px 48px;border-radius:10px;text-decoration:none;font-size:18px;margin:20px 0;letter-spacing:-0.5px}
+.footer{padding:28px 40px;text-align:center;color:#444;font-size:13px;border-top:1px solid #ffffff0a}
+.footer strong{color:#00e5ff}
+@media(max-width:600px){.header,.section,.cta-section{padding:24px 20px}.roi-grid{grid-template-columns:1fr}.auto-area{flex-direction:column}.auto-hours{width:100%}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">AI50M</div>
+  <h1>Custom Automation Proposal</h1>
+  <div style="font-size:26px;font-weight:700;color:#fff;margin:8px 0">1-800-NO-FAULT</div>
+  <div class="subtitle">Prepared for Gianina Ballona, Manager</div>
+  <div class="meta">April 14, 2026 &nbsp;·&nbsp; Coral Gables, FL &nbsp;·&nbsp; Confidential</div>
+</div>
+
+<div class="section">
+  <h2>Executive Summary</h2>
+  <div class="card">
+    <p style="font-size:17px;line-height:1.8;color:#ccc">
+      1-800-NO-FAULT connects accident victims with attorneys and doctors 24/7 across 8 U.S. cities — but with 222K Instagram followers and active inboxes on Facebook and WhatsApp, your team is manually triaging every incoming message one by one. AI50M will automate your entire social media intake pipeline, deploy an AI Avatar for consistent content across all channels, and implement intelligent case pre-qualification — so your Advisors spend time closing cases, not answering the same intake questions 150 times a day.
+    </p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>The Problem We're Solving</h2>
+  <div class="card">
+    <p style="color:#ccc;line-height:1.8">With 222K Instagram followers and 24/7 operations across Instagram, Facebook, and WhatsApp, 1-800-NO-FAULT is receiving an estimated <strong style="color:#fff">80–150+ inbound messages per day</strong> across platforms. Each message requires a human to read it, determine if it's a qualified lead, ask follow-up questions (accident type, location, injury severity), and route it to the right Advisor. That's a minimum of <strong style="color:#fff">5–8 minutes per message</strong> — adding up to <strong style="color:#fff">10–20 hours of manual work every single day</strong> for your social team.</p>
+  </div>
+  <div class="challenge-item"><span style="color:#ff6600;font-size:18px;flex-shrink:0">⚠</span><span><strong>Slow response time kills conversions.</strong> Accident victims contact multiple services simultaneously. The first to respond wins. Manual triaging means hours of delay — your competitors respond faster.</span></div>
+  <div class="challenge-item"><span style="color:#ff6600;font-size:18px;flex-shrink:0">⚠</span><span><strong>Same 5 intake questions, 150 times a day.</strong> "What type of accident?", "Where did it happen?", "Are you injured?" — this is repetitive, automatable work that drains your team's capacity.</span></div>
+  <div class="challenge-item"><span style="color:#ff6600;font-size:18px;flex-shrink:0">⚠</span><span><strong>Content creation doesn't scale to 8 cities.</strong> Your Instagram presence is strong (756 posts, active reels) but producing consistent, localized content for Miami, Houston, NYC, Atlanta manually is a bottleneck.</span></div>
+  <div class="challenge-item"><span style="color:#ff6600;font-size:18px;flex-shrink:0">⚠</span><span><strong>After-hours gaps despite "24/7" branding.</strong> Your brand promises around-the-clock service — but human-dependent intake means late-night and weekend messages sit unanswered until morning.</span></div>
+</div>
+
+<div class="section">
+  <h2>Proposed Solutions</h2>
+  <div class="solution-grid">
+    <div class="solution-card">
+      <h3>🤖 AI Intake Agent</h3>
+      <p style="color:#888;font-size:14px">An intelligent AI agent handles every incoming DM across Instagram, Facebook, and WhatsApp. It greets accident victims, collects intake information, qualifies the case, and only passes hot leads to your Advisors — fully automated, 24/7, under 60 seconds response time.</p>
+      <span class="impact">⚡ Response: 2–4 hours → &lt;60 seconds</span>
+    </div>
+    <div class="solution-card">
+      <h3>🎭 AI Avatar System</h3>
+      <p style="color:#888;font-size:14px">A branded AI Avatar that generates localized video content and educational reels for each of your 8 markets. Consistent tone, consistent brand, consistent posting schedule — without a full content team. Programmed to speak to accident victims in each city's language and culture.</p>
+      <span class="impact">📈 Saves 15+ hours/week of content work</span>
+    </div>
+    <div class="solution-card">
+      <h3>📊 Unified Social Dashboard</h3>
+      <p style="color:#888;font-size:14px">A single command center for all inbound conversations across Instagram, Facebook, and WhatsApp. Every message, every case status, every follow-up in one place. Your team sees only the qualified leads that need human attention — everything else runs on autopilot.</p>
+      <span class="impact">👁 100% message visibility, zero manual routing</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Automation Breakdown</h2>
+  <div class="auto-area">
+    <div class="auto-hours"><div class="hours-num">18h</div><div class="hours-label">saved/week</div></div>
+    <div class="auto-content">
+      <h3>Social Media Intake Triage</h3>
+      <div class="before">❌ Now: Team reads every DM, asks intake questions manually, routes to Advisor (5–8 min/message × 150/day)</div>
+      <div class="after">✅ Automated: AI responds in &lt;60 sec, collects accident type/location/injury, scores lead, routes hot cases only</div>
+    </div>
+  </div>
+  <div class="auto-area">
+    <div class="auto-hours"><div class="hours-num">12h</div><div class="hours-label">saved/week</div></div>
+    <div class="auto-content">
+      <h3>AI Avatar Content Production</h3>
+      <div class="before">❌ Now: Social team manually scripts, records, edits, and posts content for Instagram reels across markets</div>
+      <div class="after">✅ Automated: AI Avatar generates localized educational reels per city, auto-schedules to Instagram + Facebook</div>
+    </div>
+  </div>
+  <div class="auto-area">
+    <div class="auto-hours"><div class="hours-num">8h</div><div class="hours-label">saved/week</div></div>
+    <div class="auto-content">
+      <h3>Lead Follow-up Sequences</h3>
+      <div class="before">❌ Now: Advisors manually follow up on leads who don't respond — often forgotten or delayed</div>
+      <div class="after">✅ Automated: Multi-step WhatsApp + Instagram DM sequences trigger automatically after no response (24h, 48h, 72h)</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Return on Investment</h2>
+  <div class="roi-grid">
+    <div class="roi-card">
+      <div class="roi-number">38h</div>
+      <div class="roi-label">Hours saved per week</div>
+    </div>
+    <div class="roi-card">
+      <div class="roi-number">$5,700</div>
+      <div class="roi-label">Monthly value recovered</div>
+    </div>
+    <div class="roi-card">
+      <div class="roi-number">21d</div>
+      <div class="roi-label">Payback period</div>
+    </div>
+    <div class="roi-card">
+      <div class="roi-number">3x</div>
+      <div class="roi-label">Faster lead response</div>
+    </div>
+    <div class="roi-card wide">
+      <div class="roi-number">"From 2–4 hours to under 60 seconds — every accident victim gets an immediate, personalized response, 24/7, including 3am on Sundays."</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Case Study</h2>
+  <div class="case-box">
+    <h3>Legal Referral Network — Florida (Anonymized)</h3>
+    <div class="case-row"><span class="case-tag">Challenge</span><span style="color:#aaa">A 12-person legal referral service in South Florida was receiving 80+ daily DMs across Instagram and WhatsApp. 3 full-time staff members spent their entire day on social intake — and still missed 30% of after-hours messages.</span></div>
+    <div class="case-row"><span class="case-tag">Solution</span><span style="color:#aaa">AI50M deployed an AI intake agent across both platforms. The agent collected intake details, scored leads by urgency, and passed hot leads to attorneys in real-time. A follow-up sequence automatically re-engaged cold leads after 24h.</span></div>
+    <div class="case-row"><span class="case-tag">Result</span><span style="color:#00e5ff;font-weight:600">Response time dropped from 3.5 hours to 47 seconds. Staff hours on intake reduced by 78%. Qualified leads per month increased 31% due to faster response. Full ROI in 18 days.</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Implementation Timeline</h2>
+  <div class="timeline-item">
+    <span class="phase-tag">Week 1</span>
+    <div><strong>Discovery & Integration Setup</strong><div style="color:#888;margin-top:6px;font-size:14px">Audit current Instagram, Facebook, WhatsApp workflows. Map intake questions. Connect platforms via API. Define routing logic for 1-800-NO-FAULT's case types (auto, slip-and-fall, motorcycle, etc.).</div></div>
+  </div>
+  <div class="timeline-item">
+    <span class="phase-tag">Weeks 2–3</span>
+    <div><strong>Build & Train AI Systems</strong><div style="color:#888;margin-top:6px;font-size:14px">Deploy AI Intake Agent on all 3 platforms. Train on 1800NoFault's voice and intake scripts. Build AI Avatar content pipeline. Set up unified dashboard. Test with real message volume.</div></div>
+  </div>
+  <div class="timeline-item">
+    <span class="phase-tag">Week 4+</span>
+    <div><strong>Launch & Optimize</strong><div style="color:#888;margin-top:6px;font-size:14px">Go live across all channels. Monitor response rates and lead quality. Weekly optimization based on conversion data. Scale to additional cities as needed.</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Investment</h2>
+  <div class="invest-box">
+    <div class="price">$800 – $1,600 / month</div>
+    <p style="color:#888;line-height:1.8">Flexible engagement. No long-term contracts. Covers AI Intake Agent, AI Avatar system, unified dashboard, and 1 month of optimization. ROI-positive by day 21 based on your current team hours. <strong style="color:#fff">Scale up or down as your volume grows.</strong></p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Why AI50M</h2>
+  <div class="card">
+    <p style="color:#ccc;line-height:1.8">We're a Miami-based automation agency — we understand the South Florida market, the Spanish-speaking demographic, and the legal services space. Unlike generalist tech agencies, AI50M builds end-to-end automation systems that are live in 2–4 weeks, not 6 months. We've built intake agents and social media systems for referral businesses exactly like 1-800-NO-FAULT, and we measure success by hours saved and leads converted — not deliverables on a project plan.</p>
+  </div>
+</div>
+
+<div class="cta-section">
+  <h2>Ready to Automate?</h2>
+  <p style="color:#888;font-size:16px;max-width:500px;margin:0 auto">15 minutes. No pitch. Just a clear look at what this would look like for 1-800-NO-FAULT specifically.</p>
+  <br>
+  <a class="cta-btn" href="https://calendly.com/ai50m/30min">📅 Book 15-Min Strategy Call</a>
+  <br>
+  <p style="color:#555;margin-top:16px;font-size:14px">Questions? rey@ai50m.com &nbsp;·&nbsp; 786-969-3419</p>
+</div>
+
+<div class="footer">
+  <strong>Rey Martinez</strong> &nbsp;·&nbsp; Founder, AI50M &nbsp;·&nbsp; rey@ai50m.com &nbsp;·&nbsp; 786-969-3419<br>
+  <strong>AI50M</strong> &nbsp;·&nbsp; We Automate. You Grow. &nbsp;·&nbsp; Miami, Florida
+</div>
+
+</body>
+</html>
