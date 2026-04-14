@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="page-title">Propuesta AI50M</title>
+<meta name="description" id="page-desc" content="Propuesta de automatización AI50M">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--cyan:#00e5ff;--bg:#0a0a0a;--card:#111;--border:#ffffff12}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:#fff;line-height:1.6;overflow-x:hidden}
+/* NAV */
+.nav{display:flex;justify-content:space-between;align-items:center;padding:18px 40px;position:sticky;top:0;background:#0a0a0aee;backdrop-filter:blur(16px);border-bottom:1px solid var(--border);z-index:100}
+.nav-logo{font-size:20px;font-weight:800;color:var(--cyan)}
+.nav-cta{background:var(--cyan);color:#000;font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;font-size:14px;transition:.2s}
+.nav-cta:hover{opacity:.85}
+/* HERO */
+.hero{padding:80px 40px 64px;max-width:880px;margin:0 auto;text-align:center}
+.badge{display:inline-flex;align-items:center;gap:8px;background:#00e5ff12;border:1px solid #00e5ff30;color:var(--cyan);padding:6px 16px;border-radius:20px;font-size:13px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:28px}
+.hero h1{font-size:clamp(30px,5vw,54px);font-weight:800;line-height:1.1;letter-spacing:-1.5px;margin-bottom:20px}
+.hero h1 .hl{color:var(--cyan)}
+.hero p{font-size:17px;color:#888;max-width:540px;margin:0 auto 40px;line-height:1.8}
+.hero-cta{display:inline-block;background:var(--cyan);color:#000;font-weight:800;padding:16px 40px;border-radius:10px;text-decoration:none;font-size:16px;letter-spacing:-.3px;transition:.2s}
+.hero-cta:hover{opacity:.85;transform:translateY(-1px)}
+/* PROBLEM */
+.problem{background:#0d0d0d;padding:72px 40px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.section-label{text-align:center;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--cyan);margin-bottom:12px}
+.section-title{text-align:center;font-size:clamp(24px,3vw,36px);font-weight:800;margin-bottom:12px;letter-spacing:-.5px}
+.section-sub{text-align:center;color:#666;margin-bottom:56px;font-size:16px;max-width:540px;margin-left:auto;margin-right:auto}
+.problem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:900px;margin:0 auto 48px}
+.problem-card{background:#0a0a0a;border:1px solid #ff444422;border-radius:14px;padding:24px;border-top:2px solid #ff4444}
+.problem-card .icon{font-size:32px;margin-bottom:12px}
+.problem-card h3{font-size:15px;font-weight:700;margin-bottom:8px;color:#fff}
+.problem-card p{font-size:13px;color:#666;line-height:1.6}
+.cost-bar{max-width:600px;margin:0 auto;background:#1a0000;border:1px solid #ff444433;border-radius:12px;padding:24px;text-align:center}
+.cost-bar .cost-num{font-size:40px;font-weight:800;color:#ff6644}
+.cost-bar .cost-label{color:#888;font-size:14px;margin-top:6px}
+/* SOLUTION */
+.solution{padding:72px 40px}
+.solution-visual{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;max-width:860px;margin:0 auto 48px}
+.before-box,.after-box{border-radius:16px;padding:28px;width:260px}
+.before-box{background:#1a0800;border:1px solid #ff444433}
+.before-box h3{color:#ff6644;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+.after-box{background:#001a0d;border:2px solid #00e5ff44}
+.after-box h3{color:var(--cyan);font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+.item{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;font-size:14px}
+.item .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:8px}
+.dot-red{background:#ff4444}
+.dot-cyan{background:var(--cyan)}
+.arrow-box{font-size:36px;color:var(--cyan)}
+/* METRICS */
+.metrics{background:#0d0d0d;padding:72px 40px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;max-width:860px;margin:0 auto}
+.metric{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:28px 20px;text-align:center}
+.metric-num{font-size:48px;font-weight:800;color:var(--cyan);line-height:1;margin-bottom:8px}
+.metric-lbl{font-size:13px;color:#666}
+/* FEATURES */
+.features{padding:72px 40px}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;max-width:900px;margin:0 auto}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px}
+.feature .icon{font-size:28px;margin-bottom:14px}
+.feature h3{font-size:15px;font-weight:700;margin-bottom:8px}
+.feature p{font-size:13px;color:#666;line-height:1.6}
+/* TIMELINE */
+.timeline{background:#0d0d0d;padding:72px 40px;border-top:1px solid var(--border)}
+.timeline-list{max-width:680px;margin:0 auto}
+.tl-item{display:flex;gap:20px;margin-bottom:20px;padding:20px;background:var(--bg);border:1px solid var(--border);border-radius:12px;align-items:flex-start}
+.tl-badge{background:#00e5ff15;color:var(--cyan);border:1px solid #00e5ff30;padding:6px 14px;border-radius:20px;font-size:12px;white-space:nowrap;flex-shrink:0}
+.tl-content h4{font-size:15px;font-weight:700;margin-bottom:4px}
+.tl-content p{font-size:13px;color:#666;line-height:1.5}
+/* CTA */
+.cta-section{padding:80px 40px;text-align:center}
+.cta-section h2{font-size:clamp(28px,4vw,44px);font-weight:800;letter-spacing:-1px;margin-bottom:16px}
+.cta-section p{color:#666;font-size:16px;margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.7}
+.cta-big{display:inline-block;background:var(--cyan);color:#000;font-weight:800;padding:20px 52px;border-radius:12px;text-decoration:none;font-size:18px;letter-spacing:-.3px;transition:.2s;margin-bottom:20px}
+.cta-big:hover{opacity:.85;transform:translateY(-2px)}
+.cta-contact{color:#555;font-size:14px;margin-top:16px}
+.cta-contact a{color:#888;text-decoration:none}
+/* FOOTER */
+.footer{padding:28px 40px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.footer-logo{font-size:18px;font-weight:800;color:var(--cyan)}
+.footer-info{font-size:13px;color:#444}
+@media(max-width:640px){.nav,.hero,.problem,.solution,.metrics,.features,.timeline,.cta-section,.footer{padding-left:20px;padding-right:20px}.hero{padding-top:56px}.before-box,.after-box{width:100%}.arrow-box{transform:rotate(90deg)}.footer{justify-content:center;text-align:center}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">AI50M</div>
+  <a class="nav-cta" id="nav-cta-link" href="#">Descargar Propuesta</a>
+</nav>
+
+<section class="hero">
+  <div class="badge">✦ <span id="hero-badge">Propuesta personalizada</span></div>
+  <h1 id="hero-title">Automatización AI para <span class="hl" id="hero-company">Tu Negocio</span></h1>
+  <p id="hero-subtitle">Descripción del problema y solución.</p>
+  <a class="hero-cta" id="hero-cta" href="#">Ver propuesta completa →</a>
+</section>
+
+<section class="problem">
+  <div class="section-label">El Problema</div>
+  <h2 class="section-title" id="prob-title">El costo del trabajo manual</h2>
+  <p class="section-sub" id="prob-sub">Descripción del problema.</p>
+  <div class="problem-grid" id="problem-grid"></div>
+  <div class="cost-bar">
+    <div class="cost-num" id="cost-num">40h</div>
+    <div class="cost-label" id="cost-label">horas/semana perdidas en tareas repetitivas</div>
+  </div>
+</section>
+
+<section class="solution">
+  <div class="section-label">La Solución</div>
+  <h2 class="section-title">Antes vs. Después</h2>
+  <p class="section-sub">Con AI50M, tu equipo trabaja en lo que importa.</p>
+  <div class="solution-visual">
+    <div class="before-box">
+      <h3>⚠ Antes</h3>
+      <div id="before-list"></div>
+    </div>
+    <div class="arrow-box">→</div>
+    <div class="after-box">
+      <h3>✓ Con AI50M</h3>
+      <div id="after-list"></div>
+    </div>
+  </div>
+</section>
+
+<section class="metrics">
+  <div class="section-label">Resultados</div>
+  <h2 class="section-title">ROI para <span id="metrics-company">tu negocio</span></h2>
+  <p class="section-sub" style="margin-bottom:48px">Estimado conservador basado en operaciones actuales.</p>
+  <div class="metrics-grid" id="metrics-grid"></div>
+</section>
+
+<section class="features">
+  <div class="section-label">Qué Incluye</div>
+  <h2 class="section-title">El sistema completo</h2>
+  <p class="section-sub" style="margin-bottom:48px">Cada pieza diseñada para tu operación.</p>
+  <div class="features-grid" id="features-grid"></div>
+</section>
+
+<section class="timeline">
+  <div class="section-label">Implementación</div>
+  <h2 class="section-title" style="margin-bottom:12px">En producción en 4 semanas</h2>
+  <p class="section-sub" style="margin-bottom:48px">Sin interrumpir tus operaciones actuales.</p>
+  <div class="timeline-list" id="timeline-list"></div>
+</section>
+
+<section class="cta-section">
+  <h2>¿Listo para automatizar?</h2>
+  <p id="cta-sub">15 minutos. Sin compromiso. Plan concreto para tu negocio.</p>
+  <br>
+  <a class="cta-big" id="cta-pdf" href="#">📄 Descargar Propuesta PDF</a>
+  <br>
+  <div class="cta-contact">¿Preguntas? <a href="mailto:rey@ai50m.com">rey@ai50m.com</a> · <a href="tel:+17869693419">786-969-3419</a></div>
+</section>
+
+<footer class="footer">
+  <div class="footer-logo">AI50M</div>
+  <div class="footer-info">Rey Martinez · Founder · rey@ai50m.com · 786-969-3419 · Miami, FL · We Automate. You Grow.</div>
+</footer>
+
+<script>
+// ── DATA (injected per campaign) ─────────────────────────────────────────────
+const D = window.CAMPAIGN_DATA || {
+  company: "Tu Negocio",
+  badge: "Propuesta personalizada · AI50M",
+  heroTitle: "Automatización AI para Tu Negocio",
+  heroSubtitle: "Tu equipo pierde horas cada semana en tareas repetitivas. Nosotros las automatizamos.",
+  pdfUrl: "#",
+  problemTitle: "El costo del trabajo manual",
+  problemSub: "Tareas repetitivas que drenan tiempo y dinero cada día.",
+  problems: [
+    { icon: "⏱", title: "Tiempo perdido", desc: "Horas semanales en tareas que una IA puede hacer en segundos." },
+    { icon: "❌", title: "Errores humanos", desc: "Procesos manuales generan inconsistencias y errores costosos." },
+    { icon: "📉", title: "Escalabilidad limitada", desc: "El negocio no puede crecer sin contratar más personal." }
+  ],
+  costNum: "40h", costLabel: "horas/semana perdidas en trabajo manual",
+  before: ["Respuesta manual a cada cliente", "Seguimiento por WhatsApp uno a uno", "Reportes hechos a mano"],
+  after: ["IA responde en <60 segundos, 24/7", "Seguimientos automáticos y personalizados", "Dashboards en tiempo real"],
+  metrics: [
+    { num: "40h", label: "Horas ahorradas por semana" },
+    { num: "$4,800", label: "Valor recuperado mensualmente" },
+    { num: "21d", label: "Tiempo de payback" },
+    { num: "24/7", label: "Operación automatizada" }
+  ],
+  features: [
+    { icon: "🤖", title: "Agente de IA", desc: "Maneja consultas entrantes, califica leads y responde 24/7 sin intervención humana." },
+    { icon: "⚡", title: "Automatización de procesos", desc: "Los flujos repetitivos corren solos: recordatorios, seguimientos, reportes." },
+    { icon: "📊", title: "Dashboard unificado", desc: "Todos tus canales y métricas en un solo lugar, en tiempo real." }
+  ],
+  timeline: [
+    { phase: "Semana 1", name: "Discovery & Setup", desc: "Auditoría de procesos actuales. Conexión de sistemas existentes. Mapa de automatización." },
+    { phase: "Semanas 2–3", name: "Construcción", desc: "Desarrollo de los agentes IA. Integración con tus herramientas. Testing con datos reales." },
+    { phase: "Semana 4+", name: "Lanzamiento", desc: "Go live. Monitoreo en tiempo real. Optimización basada en resultados." }
+  ],
+  ctaSub: "15 minutos. Sin compromiso. Plan concreto para tu operación.",
+  investmentRange: "$800 – $1,600/mes"
+};
+
+// ── RENDER ───────────────────────────────────────────────────────────────────
+document.title = `AI50M · Propuesta para ${D.company}`;
+document.getElementById('page-title').textContent = `AI50M · Propuesta para ${D.company}`;
+document.getElementById('page-desc').setAttribute('content', D.heroSubtitle);
+document.getElementById('hero-badge').textContent = D.badge;
+document.getElementById('hero-title').innerHTML = `Automatización AI para <span class="hl">${D.company}</span>`;
+document.getElementById('hero-subtitle').textContent = D.heroSubtitle;
+document.getElementById('hero-cta').href = D.pdfUrl;
+document.getElementById('hero-cta').textContent = 'Descargar Propuesta →';
+document.getElementById('nav-cta-link').href = D.pdfUrl;
+
+document.getElementById('prob-title').textContent = D.problemTitle;
+document.getElementById('prob-sub').textContent = D.problemSub;
+document.getElementById('cost-num').textContent = D.costNum;
+document.getElementById('cost-label').textContent = D.costLabel;
+
+const pg = document.getElementById('problem-grid');
+D.problems.forEach(p => {
+  pg.innerHTML += `<div class="problem-card"><div class="icon">${p.icon}</div><h3>${p.title}</h3><p>${p.desc}</p></div>`;
+});
+
+const bl = document.getElementById('before-list');
+D.before.forEach(b => { bl.innerHTML += `<div class="item"><div class="dot dot-red"></div><span>${b}</span></div>`; });
+const al = document.getElementById('after-list');
+D.after.forEach(a => { al.innerHTML += `<div class="item"><div class="dot dot-cyan"></div><span>${a}</span></div>`; });
+
+document.getElementById('metrics-company').textContent = D.company;
+const mg = document.getElementById('metrics-grid');
+D.metrics.forEach(m => { mg.innerHTML += `<div class="metric"><div class="metric-num">${m.num}</div><div class="metric-lbl">${m.label}</div></div>`; });
+
+const fg = document.getElementById('features-grid');
+D.features.forEach(f => { fg.innerHTML += `<div class="feature"><div class="icon">${f.icon}</div><h3>${f.title}</h3><p>${f.desc}</p></div>`; });
+
+const tl = document.getElementById('timeline-list');
+D.timeline.forEach(t => { tl.innerHTML += `<div class="tl-item"><span class="tl-badge">${t.phase}</span><div class="tl-content"><h4>${t.name}</h4><p>${t.desc}</p></div></div>`; });
+
+document.getElementById('cta-sub').textContent = D.ctaSub;
+document.getElementById('cta-pdf').href = D.pdfUrl;
+document.getElementById('cta-pdf').textContent = '📄 Descargar Propuesta PDF';
+</script>
+</body>
+</html>
