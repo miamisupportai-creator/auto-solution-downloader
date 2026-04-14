@@ -1,0 +1,92 @@
+name: Setup Cloud SQL + Run Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "create" to confirm Cloud SQL creation'
+        required: true
+        default: ''
+
+jobs:
+  setup-cloudsql:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'create'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set project
+        run: gcloud config set project project-5ce986c0-b74f-47fa-bed
+
+      - name: Enable Cloud SQL Admin API
+        run: gcloud services enable sqladmin.googleapis.com --quiet
+
+      - name: Check if Cloud SQL instance exists
+        id: check_instance
+        run: |
+          if gcloud sql instances describe leads-db --quiet 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Cloud SQL instance (PostgreSQL 15)
+        if: steps.check_instance.outputs.exists == 'false'
+        run: |
+          gcloud sql instances create leads-db             --database-version=POSTGRES_15             --tier=db-f1-micro             --region=us-east1             --storage-type=SSD             --storage-size=10GB             --backup-start-time=04:00             --availability-type=zonal             --no-assign-ip             --quiet
+          echo "✅ Cloud SQL instance created"
+
+      - name: Create database
+        if: steps.check_instance.outputs.exists == 'false'
+        run: |
+          gcloud sql databases create jarvis_db --instance=leads-db --quiet || true
+          echo "✅ Database created"
+
+      - name: Create user
+        if: steps.check_instance.outputs.exists == 'false'
+        run: |
+          gcloud sql users create leads_user             --instance=leads-db             --password="${{ secrets.DB_PASSWORD }}"             --quiet || true
+          echo "✅ DB user created"
+
+      - name: Install Cloud SQL Proxy
+        run: |
+          curl -o cloud-sql-proxy             https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.9.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+
+      - name: Run Migration via Cloud SQL Proxy
+        run: |
+          PROJECT="project-5ce986c0-b74f-47fa-bed"
+          INSTANCE_CONN="${PROJECT}:us-east1:leads-db"
+          
+          # Start proxy in background
+          ./cloud-sql-proxy "${INSTANCE_CONN}" --port 5432 &
+          PROXY_PID=$!
+          sleep 5
+          
+          # Install psql
+          sudo apt-get install -y postgresql-client -q
+          
+          # Run migration
+          PGPASSWORD="${{ secrets.DB_PASSWORD }}" psql             -h 127.0.0.1             -U leads_user             -d jarvis_db             -f db/migrations/001-jarvis-enhancements.sql
+          
+          echo "✅ Migration complete"
+          
+          # Stop proxy
+          kill $PROXY_PID
+
+      - name: Get instance connection name
+        run: |
+          CONN=$(gcloud sql instances describe leads-db --format='value(connectionName)')
+          echo "✅ Connection name: $CONN"
+          echo "Add this to your .env: DATABASE_URL=postgresql://leads_user:PASSWORD@localhost/jarvis_db"
+          echo "Cloud SQL connection name: $CONN"
