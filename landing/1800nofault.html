@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solución para 1800NoFault — AI50M</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;overflow-x:hidden}
+
+/* HEADER */
+.nav{display:flex;justify-content:space-between;align-items:center;padding:20px 40px;border-bottom:1px solid #ffffff0f;position:sticky;top:0;background:#0a0a0aee;backdrop-filter:blur(12px);z-index:100}
+.nav-logo{font-size:22px;font-weight:800;color:#00e5ff;letter-spacing:-0.5px}
+.nav-cta{background:#00e5ff;color:#000;font-weight:700;padding:10px 24px;border-radius:8px;text-decoration:none;font-size:14px;transition:opacity .2s}
+.nav-cta:hover{opacity:.85}
+
+/* HERO */
+.hero{padding:80px 40px 60px;text-align:center;max-width:860px;margin:0 auto}
+.hero-badge{display:inline-block;background:#00e5ff15;border:1px solid #00e5ff33;color:#00e5ff;padding:6px 16px;border-radius:20px;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:24px}
+.hero h1{font-size:clamp(32px,5vw,56px);font-weight:800;line-height:1.1;margin-bottom:20px;letter-spacing:-1px}
+.hero h1 span{color:#00e5ff}
+.hero p{font-size:18px;color:#888;max-width:560px;margin:0 auto 40px;line-height:1.7}
+
+/* PROBLEM VISUAL */
+.problem{padding:60px 40px;background:#0d0d0d;border-top:1px solid #ffffff08;border-bottom:1px solid #ffffff08}
+.problem h2{text-align:center;font-size:28px;font-weight:700;margin-bottom:12px}
+.problem .sub{text-align:center;color:#666;margin-bottom:48px;font-size:16px}
+.platforms{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:wrap;max-width:800px;margin:0 auto}
+.platform-card{background:#111;border:1px solid #ffffff15;border-radius:16px;padding:28px 24px;text-align:center;width:200px;position:relative}
+.platform-icon{font-size:40px;margin-bottom:12px;display:block}
+.platform-name{font-size:15px;font-weight:600;margin-bottom:6px}
+.platform-problem{font-size:12px;color:#ff6644;background:#ff664415;padding:4px 10px;border-radius:20px;display:inline-block}
+.chaos-arrow{color:#ff4444;font-size:28px;padding:0 12px;align-self:center}
+.chaos-result{background:#1a0000;border:2px solid #ff444444;border-radius:16px;padding:28px 24px;text-align:center;width:200px}
+.chaos-result .icon{font-size:40px;margin-bottom:12px;display:block}
+.chaos-result .label{font-size:14px;font-weight:600;color:#ff6644;margin-bottom:8px}
+.chaos-result .detail{font-size:12px;color:#666;line-height:1.5}
+.vs-divider{width:100%;text-align:center;padding:40px 0;font-size:20px;font-weight:700;color:#333;letter-spacing:4px;position:relative}
+.vs-divider::before,.vs-divider::after{content:'';position:absolute;top:50%;width:calc(50% - 60px);height:1px;background:#ffffff0a}
+.vs-divider::before{left:0}.vs-divider::after{right:0}
+
+/* SOLUTION */
+.solution-row{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;max-width:800px;margin:0 auto}
+.unified-box{background:#001a0d;border:2px solid #00e5ff44;border-radius:20px;padding:32px;text-align:center;width:240px}
+.unified-box .icon{font-size:48px;margin-bottom:12px;display:block}
+.unified-box h3{color:#00e5ff;font-size:16px;margin-bottom:8px}
+.unified-box p{font-size:12px;color:#666;line-height:1.5}
+.solution-arrow{color:#00e5ff;font-size:28px;padding:0 8px}
+.benefit-list{display:flex;flex-direction:column;gap:12px}
+.benefit-item{display:flex;align-items:center;gap:12px;background:#00e5ff08;border:1px solid #00e5ff22;border-radius:10px;padding:14px 18px;font-size:14px}
+.benefit-item .check{color:#00e5ff;font-size:18px;flex-shrink:0}
+
+/* METRICS */
+.metrics{padding:60px 40px;text-align:center}
+.metrics h2{font-size:28px;font-weight:700;margin-bottom:12px}
+.metrics .sub{color:#666;margin-bottom:48px;font-size:16px}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;max-width:800px;margin:0 auto}
+.metric-card{background:#0d0d0d;border:1px solid #ffffff10;border-radius:16px;padding:32px 20px}
+.metric-num{font-size:52px;font-weight:800;color:#00e5ff;line-height:1;margin-bottom:8px}
+.metric-label{font-size:14px;color:#666}
+
+/* BOOKING */
+.booking{padding:60px 40px;background:#0d0d0d;border-top:1px solid #ffffff08}
+.booking h2{text-align:center;font-size:32px;font-weight:800;margin-bottom:12px}
+.booking .sub{text-align:center;color:#888;margin-bottom:40px;font-size:16px;max-width:500px;margin-left:auto;margin-right:auto}
+.calendly-wrapper{max-width:900px;margin:0 auto;border-radius:16px;overflow:hidden;background:#fff}
+
+/* FOOTER */
+.footer{padding:32px 40px;text-align:center;color:#444;font-size:13px;border-top:1px solid #ffffff08}
+.footer strong{color:#00e5ff}
+
+@media(max-width:680px){
+  .nav{padding:16px 20px}
+  .hero{padding:60px 20px 40px}
+  .problem,.metrics,.booking{padding:40px 20px}
+  .platforms{gap:12px}
+  .chaos-arrow,.solution-arrow{transform:rotate(90deg)}
+  .solution-row{flex-direction:column;align-items:center}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">AI50M</div>
+  <a class="nav-cta" href="https://calendly.com/ai50m/30min">Agendar llamada →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">Solución personalizada para 1800NoFault</div>
+  <h1>Tres plataformas.<br><span>Una solución automática.</span></h1>
+  <p>1800NoFault atiende a víctimas de accidentes en Instagram, Facebook y WhatsApp — las 24 horas. Automatizamos todo el intake para que tu equipo cierre casos, no responda mensajes.</p>
+  <a href="#booking" style="display:inline-block;background:#00e5ff;color:#000;font-weight:800;padding:16px 40px;border-radius:10px;text-decoration:none;font-size:16px">Ver disponibilidad →</a>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem">
+  <h2>El problema actual</h2>
+  <p class="sub">Cada mensaje entra por un canal diferente. Alguien tiene que leerlo, calificarlo y redirigirlo — manualmente, todo el día.</p>
+  
+  <div class="platforms">
+    <div class="platform-card">
+      <span class="platform-icon">📸</span>
+      <div class="platform-name">Instagram</div>
+      <span class="platform-problem">222K seguidores</span>
+    </div>
+    <div class="chaos-arrow">+</div>
+    <div class="platform-card">
+      <span class="platform-icon">📘</span>
+      <div class="platform-name">Facebook</div>
+      <span class="platform-problem">Comunidad activa</span>
+    </div>
+    <div class="chaos-arrow">+</div>
+    <div class="platform-card">
+      <span class="platform-icon">💬</span>
+      <div class="platform-name">WhatsApp</div>
+      <span class="platform-problem">Intake 24/7</span>
+    </div>
+    <div class="chaos-arrow">=</div>
+    <div class="chaos-result">
+      <span class="icon">🔥</span>
+      <div class="label">Caos manual</div>
+      <div class="detail">80–150 mensajes/día respondidos a mano. Respuesta lenta = casos perdidos.</div>
+    </div>
+  </div>
+
+  <div class="vs-divider">VS</div>
+
+  <div class="solution-row">
+    <div class="unified-box">
+      <span class="icon">🤖</span>
+      <h3>1 Sistema Automático</h3>
+      <p>Un agente de IA maneja todos los canales en menos de 60 segundos — cualificando, respondiendo y enrutando sin intervención humana.</p>
+    </div>
+    <div class="solution-arrow">→</div>
+    <div class="benefit-list">
+      <div class="benefit-item"><span class="check">✓</span> Respuesta automática en &lt;60 segundos</div>
+      <div class="benefit-item"><span class="check">✓</span> Intake calificado antes de llegar al Asesor</div>
+      <div class="benefit-item"><span class="check">✓</span> Avatar AI para contenido localizado por ciudad</div>
+      <div class="benefit-item"><span class="check">✓</span> Dashboard unificado — todo en un lugar</div>
+      <div class="benefit-item"><span class="check">✓</span> Operación real 24/7 sin personal nocturno</div>
+    </div>
+  </div>
+</section>
+
+<!-- METRICS -->
+<section class="metrics">
+  <h2>Lo que esto significa para 1800NoFault</h2>
+  <p class="sub">Basado en el volumen de mensajes y operaciones actuales.</p>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-num">38h</div>
+      <div class="metric-label">Horas ahorradas por semana</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-num">$50K+</div>
+      <div class="metric-label">Valor recuperado anualmente</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-num">60s</div>
+      <div class="metric-label">Tiempo de respuesta (vs. 2–4 horas)</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-num">21d</div>
+      <div class="metric-label">Retorno de inversión</div>
+    </div>
+  </div>
+</section>
+
+<!-- BOOKING -->
+<section class="booking" id="booking">
+  <h2>Veamos si aplica para ustedes</h2>
+  <p class="sub">15 minutos. Sin compromiso. Mostramos exactamente qué automatizaríamos para 1800NoFault.</p>
+  
+  <!-- Calendly inline embed -->
+  <div class="calendly-wrapper">
+    <div class="calendly-inline-widget" 
+         data-url="https://calendly.com/ai50m/30min?hide_gdpr_banner=1&primary_color=00e5ff" 
+         style="min-width:320px;height:700px;"></div>
+  </div>
+</section>
+
+<footer class="footer">
+  <strong>Rey Martinez</strong> &nbsp;·&nbsp; Founder, AI50M &nbsp;·&nbsp; rey@ai50m.com &nbsp;·&nbsp; 786-969-3419<br>
+  <strong style="color:#fff">AI50M</strong> &nbsp;·&nbsp; We Automate. You Grow. &nbsp;·&nbsp; Miami, Florida
+</footer>
+
+<script src="https://assets.calendly.com/assets/external/widget.js" type="text/javascript" async></script>
+</body>
+</html>
