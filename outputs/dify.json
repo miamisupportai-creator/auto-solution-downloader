@@ -1,0 +1,251 @@
+{
+  "name": "Dify LLM Application Platform",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "dify-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse incoming request for workflow configuration\nconst { workflowType, appType, inputs } = $input.first().body;\nreturn {\n  workflowType: workflowType || 'standard',\n  appType: appType || 'chat',\n  inputs: inputs || {}\n};"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/workflows/run",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "difyApi",
+        "options": {}
+      },
+      "id": "execute-workflow",
+      "name": "Execute Dify Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract workflow execution results\nconst response = $input.first().json;\nreturn {\n  status: response.status || 'completed',\n  workflowRunId: response.workflow_run_id,\n  outputs: response.outputs || {},\n  executionTime: response.execution_time\n};"
+      },
+      "id": "extract-results",
+      "name": "Extract Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "difyApi",
+        "options": {}
+      },
+      "id": "create-message",
+      "name": "Create Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 450]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/apps",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "difyApi",
+        "options": {}
+      },
+      "id": "list-apps",
+      "name": "List Applications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/documents/create",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "difyApi",
+        "options": {}
+      },
+      "id": "upload-document",
+      "name": "Upload Document for RAG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/knowledge-bases/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "difyApi",
+        "options": {}
+      },
+      "id": "search-knowledge",
+      "name": "Search Knowledge Base",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Transform and format response for client\nconst executionData = $input.first().json;\nreturn {\n  success: true,\n  data: executionData,\n  timestamp: new Date().toISOString(),\n  message: 'Dify workflow executed successfully'\n};"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseData": "={{ $json }}"
+      },
+      "id": "send-response",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Error handling and logging\nconst error = $input.first();\nreturn {\n  success: false,\n  error: error.message || 'Workflow execution failed',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "error-handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 500]
+    }
+  ],
+  "connections": {
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "parse-request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse-request": {
+      "main": [
+        [
+          {
+            "node": "list-apps",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "execute-workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "execute-workflow": {
+      "main": [
+        [
+          {
+            "node": "extract-results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-results": {
+      "main": [
+        [
+          {
+            "node": "search-knowledge",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "format-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list-apps": {
+      "main": [
+        [
+          {
+            "node": "create-message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "upload-document": {
+      "main": [
+        [
+          {
+            "node": "search-knowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search-knowledge": {
+      "main": [
+        [
+          {
+            "node": "format-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-response": {
+      "main": [
+        [
+          {
+            "node": "send-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create-message": {
+      "main": [
+        [
+          {
+            "node": "format-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1"
+}

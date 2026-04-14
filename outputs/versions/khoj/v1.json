@@ -1,0 +1,135 @@
+{
+  "name": "Khoj Desktop File Synchronization",
+  "nodes": [
+    {
+      "parameters": {
+        "unit": "minutes",
+        "value": 10
+      },
+      "name": "Schedule Sync",
+      "type": "n8n-nodes-base.interval",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst textFileTypes = ['org', 'md', 'markdown', 'txt', 'html', 'xml', 'appleplist', 'asm', 'asp', 'batch', 'c', 'cs', 'css', 'csv', 'eml', 'go', 'ini', 'internetshortcut', 'java', 'javascript', 'json', 'latex', 'lisp', 'makefile', 'mht', 'mum', 'pem', 'perl', 'php', 'powershell', 'python', 'rdf', 'rst', 'rtf', 'ruby', 'rust', 'scala', 'shell', 'smali', 'sql', 'svg', 'symlinktext', 'vba', 'winregistry', 'yaml'];\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst validFileTypes = textFileTypes.concat(binaryFileTypes);\n\nfunction isSupportedFileType(filePath) {\n  const fileExtension = filePath.split('.').pop().toLowerCase();\n  return validFileTypes.includes(fileExtension);\n}\n\nfunction processDirectory(filesToPush, folder) {\n  try {\n    const files = fs.readdirSync(folder, { withFileTypes: true });\n    for (const file of files) {\n      if (file.name.startsWith('.')) continue;\n      const filePath = path.join(file.path || folder, file.name);\n      if (file.isFile() && isSupportedFileType(filePath)) {\n        filesToPush.push(filePath);\n      }\n      if (file.isDirectory()) {\n        processDirectory(filesToPush, filePath);\n      }\n    }\n  } catch (err) {\n    console.error(`Error reading directory: ${err.message}`);\n  }\n}\n\nconst files = $input.first().json.files || [];\nconst folders = $input.first().json.folders || [];\nlet filesToPush = [];\n\nfor (const file of files) {\n  if (fs.existsSync(file.path)) {\n    filesToPush.push(file.path);\n  }\n}\n\nfor (const folder of folders) {\n  if (fs.existsSync(folder.path)) {\n    processDirectory(filesToPush, folder.path);\n  }\n}\n\nreturn { filesToPush, lastSync: $input.first().json.lastSync || [] };"
+      },
+      "name": "Collect Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\n\nconst filesToPush = $input.first().json.filesToPush;\nconst lastSync = $input.first().json.lastSync;\nconst regenerate = $input.first().json.regenerate || false;\n\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst filesDataToPush = [];\nconst state = { completed: true };\n\nfor (const file of filesToPush) {\n  try {\n    const stats = fs.statSync(file);\n    if (!regenerate) {\n      const lastSyncEntry = lastSync.find(s => s.path === file);\n      if (lastSyncEntry && stats.mtime.toISOString() < lastSyncEntry.datetime) {\n        continue;\n      }\n    }\n    \n    const encoding = binaryFileTypes.includes(file.split('.').pop()) ? 'binary' : 'utf8';\n    const fileContent = fs.readFileSync(file, { encoding });\n    filesDataToPush.push({\n      path: file,\n      content: fileContent,\n      encoding: encoding\n    });\n    state[file] = { success: true };\n  } catch (err) {\n    state[file] = { success: false, error: err.message };\n  }\n}\n\n// Mark deleted files\nfor (const syncedFile of lastSync) {\n  if (!filesToPush.includes(syncedFile.path)) {\n    filesDataToPush.push({\n      path: syncedFile.path,\n      content: '',\n      deleted: true\n    });\n  }\n}\n\nreturn { filesDataToPush, state };"
+      },
+      "name": "Prepare File Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.hostURL }}/api/content?client=desktop",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParametersUi": "keyValue",
+        "bodyParameters": []
+      },
+      "name": "Sync Files to Khoj",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const filesDataToPush = $input.first().json.filesDataToPush;\nconst response = $input.previous().json;\n\nconst lastSync = filesDataToPush\n  .filter(f => !f.deleted && response.includes(f.path))\n  .map(f => ({\n    path: f.path,\n    datetime: new Date().toISOString()\n  }));\n\nreturn { lastSync, success: true };"
+      },
+      "name": "Update Last Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  message: 'Sync completed successfully',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json.error || 'Unknown error';\nreturn {\n  message: 'Sync failed',\n  error: error,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "name": "Handle Sync Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Sync": {
+      "main": [
+        [
+          {
+            "node": "Collect Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Files": {
+      "main": [
+        [
+          {
+            "node": "Prepare File Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File Data": {
+      "main": [
+        [
+          {
+            "node": "Sync Files to Khoj",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Files to Khoj": {
+      "main": [
+        [
+          {
+            "node": "Update Last Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Last Sync": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

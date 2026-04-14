@@ -1,0 +1,452 @@
+{
+  "name": "AIHawk Jobs Applier AI Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyX",
+            "value": 1,
+            "unit": "days"
+          }
+        ]
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst yaml = require('js-yaml');\nconst path = require('path');\n\nconst dataFolder = './data_folder';\nconst secretsFile = path.join(dataFolder, 'secrets.yaml');\nconst configFile = path.join(dataFolder, 'work_preferences.yaml');\nconst resumeFile = path.join(dataFolder, 'plain_text_resume.yaml');\n\ntry {\n  const secrets = yaml.load(fs.readFileSync(secretsFile, 'utf8'));\n  const config = yaml.load(fs.readFileSync(configFile, 'utf8'));\n  const resume = yaml.load(fs.readFileSync(resumeFile, 'utf8'));\n  \n  return {\n    llm_api_key: secrets.llm_api_key,\n    work_preferences: config,\n    resume: resume\n  };\n} catch (error) {\n  throw new Error(`Failed to load configuration: ${error.message}`);\n}"
+      },
+      "id": "load-config",
+      "name": "Load Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": []
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "action",
+              "value": "Generate Resume",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "llm_api_key",
+              "value": "={{ $node[\"load-config\"].json.llm_api_key }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "work_preferences",
+              "value": "={{ $node[\"load-config\"].json.work_preferences }}",
+              "type": "object"
+            },
+            {
+              "id": "a4",
+              "name": "resume_data",
+              "value": "={{ $node[\"load-config\"].json.resume }}",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "id": "set-action-state",
+      "name": "Set Action State",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const action = $input.all()[0].json.action;\n\nif (action === 'Generate Resume') {\n  return { action: 'generate_resume' };\n} else if (action === 'Generate Resume Tailored for Job Description') {\n  return { action: 'generate_resume_tailored' };\n} else if (action === 'Generate Tailored Cover Letter for Job Description') {\n  return { action: 'generate_cover_letter' };\n} else {\n  return { action: 'unknown' };\n}"
+      },
+      "id": "route-action",
+      "name": "Route Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "condition1",
+              "operator": {
+                "name": "filter.operator.equals",
+                "type": "string",
+                "value": "equals"
+              },
+              "leftValue": "={{ $node[\"route-action\"].json.action }}",
+              "rightValue": "generate_resume"
+            }
+          ]
+        }
+      },
+      "id": "if-generate-resume",
+      "name": "If Generate Resume",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "condition1",
+              "operator": {
+                "name": "filter.operator.equals",
+                "type": "string",
+                "value": "equals"
+              },
+              "leftValue": "={{ $node[\"route-action\"].json.action }}",
+              "rightValue": "generate_resume_tailored"
+            }
+          ]
+        }
+      },
+      "id": "if-generate-resume-tailored",
+      "name": "If Generate Resume Tailored",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "condition1",
+              "operator": {
+                "name": "filter.operator.equals",
+                "type": "string",
+                "value": "equals"
+              },
+              "leftValue": "={{ $node[\"route-action\"].json.action }}",
+              "rightValue": "generate_cover_letter"
+            }
+          ]
+        }
+      },
+      "id": "if-generate-cover-letter",
+      "name": "If Generate Cover Letter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node[\"set-action-state\"].json.llm_api_key }}"
+            }
+          ]
+        },
+        "jsonActive": true,
+        "jsonData": {
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional resume writer. Generate a professional resume in PDF format based on the provided information."
+            },
+            {
+              "role": "user",
+              "content": "Create a professional resume based on this information: {{ JSON.stringify($node[\"set-action-state\"].json.resume_data) }}"
+            }
+          ],
+          "max_tokens": 2000
+        }
+      },
+      "id": "generate-resume-llm",
+      "name": "Generate Resume via LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node[\"set-action-state\"].json.llm_api_key }}"
+            }
+          ]
+        },
+        "jsonActive": true,
+        "jsonData": {
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional resume writer specializing in tailoring resumes for specific job descriptions. Generate a tailored resume based on the job description and candidate information."
+            },
+            {
+              "role": "user",
+              "content": "Tailor this resume for the job description. Resume: {{ JSON.stringify($node[\"set-action-state\"].json.resume_data) }}"
+            }
+          ],
+          "max_tokens": 2500
+        }
+      },
+      "id": "generate-resume-tailored-llm",
+      "name": "Generate Tailored Resume via LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $node[\"set-action-state\"].json.llm_api_key }}"
+            }
+          ]
+        },
+        "jsonActive": true,
+        "jsonData": {
+          "model": "gpt-4o-mini",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional cover letter writer. Generate a compelling, personalized cover letter tailored to the specific job description."
+            },
+            {
+              "role": "user",
+              "content": "Write a cover letter for this candidate: {{ JSON.stringify($node[\"set-action-state\"].json.resume_data) }}"
+            }
+          ],
+          "max_tokens": 1500
+        }
+      },
+      "id": "generate-cover-letter-llm",
+      "name": "Generate Cover Letter via LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const action = $input.all()[0].json.action || 'unknown';\nconst timestamp = new Date().toISOString().split('T')[0];\n\nlet filename = '';\nswitch(action) {\n  case 'generate_resume':\n    filename = `resume_base_${timestamp}.pdf`;\n    break;\n  case 'generate_resume_tailored':\n    filename = `resume_tailored_${timestamp}.pdf`;\n    break;\n  case 'generate_cover_letter':\n    filename = `cover_letter_${timestamp}.pdf`;\n    break;\n  default:\n    filename = `document_${timestamp}.pdf`;\n}\n\nreturn {\n  filename: filename,\n  output_path: `./data_folder/output/${filename}`,\n  timestamp: timestamp\n};"
+      },
+      "id": "prepare-output",
+      "name": "Prepare Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst outputData = $input.all()[0].json;\nconst outputPath = outputData.output_path;\nconst outputDir = path.dirname(outputPath);\n\n// Ensure output directory exists\nif (!fs.existsSync(outputDir)) {\n  fs.mkdirSync(outputDir, { recursive: true });\n}\n\nreturn {\n  success: true,\n  message: `Document generated: ${outputData.filename}`,\n  file_path: outputPath,\n  timestamp: outputData.timestamp\n};"
+      },
+      "id": "save-document",
+      "name": "Save Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "schedule-trigger": {
+      "main": [
+        [
+          {
+            "node": "load-config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "load-config": {
+      "main": [
+        [
+          {
+            "node": "set-action-state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-action-state": {
+      "main": [
+        [
+          {
+            "node": "route-action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "route-action": {
+      "main": [
+        [
+          {
+            "node": "if-generate-resume",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "if-generate-resume-tailored",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "if-generate-cover-letter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-generate-resume": {
+      "main": [
+        [
+          {
+            "node": "generate-resume-llm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-generate-resume-tailored": {
+      "main": [
+        [
+          {
+            "node": "generate-resume-tailored-llm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if-generate-cover-letter": {
+      "main": [
+        [
+          {
+            "node": "generate-cover-letter-llm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate-resume-llm": {
+      "main": [
+        [
+          {
+            "node": "prepare-output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate-resume-tailored-llm": {
+      "main": [
+        [
+          {
+            "node": "prepare-output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate-cover-letter-llm": {
+      "main": [
+        [
+          {
+            "node": "prepare-output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare-output": {
+      "main": [
+        [
+          {
+            "node": "save-document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
