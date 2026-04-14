@@ -1,5 +1,5 @@
 {
-  "name": "Dify LLM Application Development Platform",
+  "name": "Dify LLM Application Platform",
   "nodes": [
     {
       "parameters": {
@@ -11,9 +11,9 @@
           ]
         }
       },
-      "id": "trigger-scheduler",
+      "id": "schedule-trigger",
       "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [
         250,
@@ -23,14 +23,14 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.dify.ai/v1/apps",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
+        "url": "https://api.dify.ai/v1/workflows",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth"
       },
-      "id": "fetch-apps",
-      "name": "Fetch Dify Apps",
+      "id": "fetch-workflows",
+      "name": "Fetch Workflows",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [
         450,
         300
@@ -42,14 +42,14 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.dify.ai/v1/models",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
+        "url": "https://api.dify.ai/v1/models",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth"
       },
       "id": "fetch-models",
-      "name": "Fetch Available Models",
+      "name": "Fetch Supported Models",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [
         650,
         300
@@ -60,41 +60,34 @@
     },
     {
       "parameters": {
-        "functionCode": "return {\n  apps: $input.all()[0].json.data || [],\n  models: $input.all()[1].json.data || [],\n  timestamp: new Date().toISOString(),\n  status: 'active'\n};"
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/datasets",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth"
       },
-      "id": "aggregate-data",
-      "name": "Aggregate Platform Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "fetch-datasets",
+      "name": "Fetch RAG Datasets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         850,
         300
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_key"
+      }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://api.dify.ai/v1/workflows/execute",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "bodyParametersUi": "keyvaluepairs",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "inputs",
-              "value": "={{$json.aggregated_inputs}}"
-            },
-            {
-              "name": "user",
-              "value": "n8n-automation"
-            }
-          ]
-        }
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/agents",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth"
       },
-      "id": "execute-workflow",
-      "name": "Execute Dify Workflow",
+      "id": "fetch-agents",
+      "name": "Fetch Agents",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [
         1050,
         300
@@ -106,14 +99,14 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.dify.ai/v1/logs",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
+        "url": "https://api.dify.ai/v1/apps",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth"
       },
-      "id": "fetch-logs",
-      "name": "Fetch Execution Logs",
+      "id": "fetch-apps",
+      "name": "Fetch Applications",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [
         1250,
         300
@@ -124,13 +117,35 @@
     },
     {
       "parameters": {
-        "mode": "raw",
-        "jsonOutput": "{\n  \"workflow_id\": \"{{ $json.workflow_id }}\",\n  \"execution_status\": \"{{ $json.status }}\",\n  \"timestamp\": \"{{ now.toISOString() }}\",\n  \"models_used\": \"{{ $json.models }}\",\n  \"app_count\": \"{{ $json.apps.length }}\",\n  \"logs\": \"{{ $json.logs }}\"\n}"
+        "assignments": {
+          "assignments": [
+            {
+              "name": "workflows",
+              "value": "{{ $node[\"Fetch Workflows\"].json.data }}"
+            },
+            {
+              "name": "models",
+              "value": "{{ $node[\"Fetch Supported Models\"].json.data }}"
+            },
+            {
+              "name": "datasets",
+              "value": "{{ $node[\"Fetch RAG Datasets\"].json.data }}"
+            },
+            {
+              "name": "agents",
+              "value": "{{ $node[\"Fetch Agents\"].json.data }}"
+            },
+            {
+              "name": "applications",
+              "value": "{{ $node[\"Fetch Applications\"].json.data }}"
+            }
+          ]
+        }
       },
-      "id": "format-output",
-      "name": "Format Workflow Output",
+      "id": "aggregate-data",
+      "name": "Aggregate Platform Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "typeVersion": 3.3,
       "position": [
         1450,
         300
@@ -138,36 +153,119 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "result",
-              "value": "={\n  \"platform\": \"Dify\",\n  \"execution_type\": \"automated_workflow\",\n  \"workflow_data\": $json,\n  \"completion_time\": new Date().toISOString()\n}"
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/completion-messages",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "inputs": {},
+          "query": "Summarize the current state of all workflows, models, datasets, agents and applications"
         }
       },
-      "id": "final-transform",
-      "name": "Final Data Transform",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "id": "llm-analysis",
+      "name": "LLM Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
         1650,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_key"
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/logging/telemetry",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "event": "platform_monitoring",
+          "timestamp": "{{ $now.toIso() }}",
+          "data": "{{ $node[\"Aggregate Platform Data\"].json }}"
+        }
+      },
+      "id": "send-telemetry",
+      "name": "Send Telemetry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1850,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_key"
+      }
+    },
+    {
+      "parameters": {
+        "text": "=== Dify Platform Monitoring Report ===\n\nWorkflows: {{ $node[\"Aggregate Platform Data\"].json.workflows.length }} active\nModels: {{ $node[\"Aggregate Platform Data\"].json.models.length }} available\nDatasets: {{ $node[\"Aggregate Platform Data\"].json.datasets.length }} configured\nAgents: {{ $node[\"Aggregate Platform Data\"].json.agents.length }} deployed\nApplications: {{ $node[\"Aggregate Platform Data\"].json.applications.length }} running\n\nLLM Analysis:\n{{ $node[\"LLM Analysis\"].json.answer }}\n\nStatus: COMPLETE\nTimestamp: {{ $now.toIso() }}"
+      },
+      "id": "output-report",
+      "name": "Output Monitoring Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        2050,
         300
       ]
     }
   ],
   "connections": {
-    "trigger-scheduler": {
+    "schedule-trigger": {
+      "main": [
+        [
+          {
+            "node": "fetch-workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-workflows": {
+      "main": [
+        [
+          {
+            "node": "fetch-models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-models": {
+      "main": [
+        [
+          {
+            "node": "fetch-datasets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-datasets": {
+      "main": [
+        [
+          {
+            "node": "fetch-agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-agents": {
       "main": [
         [
           {
             "node": "fetch-apps",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "fetch-models",
             "type": "main",
             "index": 0
           }
@@ -185,55 +283,33 @@
         ]
       ]
     },
-    "fetch-models": {
-      "main": [
-        [
-          {
-            "node": "aggregate-data",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
     "aggregate-data": {
       "main": [
         [
           {
-            "node": "execute-workflow",
+            "node": "llm-analysis",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "execute-workflow": {
+    "llm-analysis": {
       "main": [
         [
           {
-            "node": "fetch-logs",
+            "node": "send-telemetry",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-logs": {
+    "send-telemetry": {
       "main": [
         [
           {
-            "node": "format-output",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "format-output": {
-      "main": [
-        [
-          {
-            "node": "final-transform",
+            "node": "output-report",
             "type": "main",
             "index": 0
           }
@@ -241,18 +317,8 @@
       ]
     }
   },
+  "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveManualExecutions": true,
-    "timezone": "UTC"
-  },
-  "staticData": null,
-  "tags": [
-    "dify",
-    "llm",
-    "workflow",
-    "automation"
-  ]
+    "executionOrder": "v1"
+  }
 }
