@@ -296,39 +296,42 @@ async function sendWhatsApp(phone11, message) {
   } catch { return 'failed'; }
 }
 
-// ── STEP 8: Send Email via Smartlead ─────────────────────────────────────────
+// ── STEP 8: Send Email via Zoho SMTP (Python subprocess) ─────────────────────
 
 async function sendEmail(email, company, message) {
-  if (!SMARTLEAD_KEY) { console.log('  ⚠️  No Smartlead key — skip email'); return 'no_key'; }
   if (DRY_RUN) { console.log(`  [DRY RUN] Email → ${email}`); return 'dry_run'; }
 
-  // Convert WA message to email format
+  const { execSync } = await import('child_process');
   const subject = `Automatización IA para ${company} — AI50M`;
-  const body = message.replace(/✓/g, '•');
 
-  const res = await httpPost(`https://server.smartlead.ai/api/v1/campaigns/create?api_key=${SMARTLEAD_KEY}`,
-    {},
-    { name: `${company} — Outreach ${new Date().toISOString().split('T')[0]}` }
-  );
+  const pyScript = `
+import smtplib, sys
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+msg = MIMEMultipart('alternative')
+msg['Subject'] = ${JSON.stringify(subject)}
+msg['From']    = 'Rey Martinez <rey@ai50m.com>'
+msg['To']      = ${JSON.stringify(email)}
+msg.attach(MIMEText(${JSON.stringify(message)}, 'plain'))
+
+try:
+    with smtplib.SMTP_SSL('smtppro.zoho.com', 465) as s:
+        s.login('rey@ai50m.com', 'nyskyg-vadxy8-fucqYz')
+        s.sendmail('rey@ai50m.com', ${JSON.stringify(email)}, msg.as_string())
+    print('sent')
+except Exception as e:
+    print('failed:', e, file=sys.stderr)
+    sys.exit(1)
+`;
 
   try {
-    const camp = JSON.parse(res.body);
-    if (!camp?.id) return 'failed';
-
-    // Add lead
-    await httpPost(`https://server.smartlead.ai/api/v1/campaigns/${camp.id}/leads?api_key=${SMARTLEAD_KEY}`,
-      {},
-      { lead_list: [{ email, company_name: company, custom_fields: { message: body } }] }
-    );
-
-    // Add sequence
-    await httpPost(`https://server.smartlead.ai/api/v1/campaigns/${camp.id}/sequences?api_key=${SMARTLEAD_KEY}`,
-      {},
-      { sequences: [{ seq_number: 1, seq_delay_details: { delay_in_days: 0 }, subject, email_body: `<p>${body.replace(/\n/g, '<br>')}</p>` }] }
-    );
-
-    return 'sent';
-  } catch { return 'failed'; }
+    const result = execSync(`python3 -c ${JSON.stringify(pyScript)}`, { timeout: 15000 }).toString().trim();
+    return result === 'sent' ? 'sent' : 'failed';
+  } catch (e) {
+    console.error('  Email error:', e.message?.slice(0, 100));
+    return 'failed';
+  }
 }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
