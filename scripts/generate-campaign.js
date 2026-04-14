@@ -12,26 +12,21 @@
  *     --industry "healthcare" \
  *     [--send-whatsapp] [--dry-run]
  * 
- * What it does:
- *   1. Scrapes the company website
- *   2. Calls Claude AI to analyze pain points
- *   3. Generates landing page HTML (from template)
- *   4. Generates PDF from landing page (via puppeteer)
- *   5. Saves both to GitHub repo
- *   6. (Optional) Sends WhatsApp with the URL
+ * WhatsApp Strategy (v2 — No Links):
+ *   Initial message = direct value prop + CTA "llamada 15 min"
+ *   No links until prospect responds and requests more info
  */
 
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const GH_TOKEN    = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-const GH_REPO     = 'miamisupportai-creator/auto-solution-downloader';
+const GH_TOKEN      = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+const GH_REPO       = 'miamisupportai-creator/auto-solution-downloader';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const WASENDER_KEY  = process.env.WASENDER_API_KEY || '972438be02d23af9024060ff42ff6158d7e343c9761798480f8efd7fd38135d2';
 const BASE_URL      = process.env.BASE_URL || 'https://miamisupportai-creator.github.io/auto-solution-downloader';
@@ -100,7 +95,6 @@ async function scrapeWebsite(website) {
   const url = website.startsWith('http') ? website : `https://${website}`;
   console.log(`  🌐 Scraping ${url}...`);
   const html = await httpGet(url);
-  // Extract text content (strip tags)
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   return text.substring(0, 2000);
 }
@@ -140,7 +134,22 @@ Return ONLY valid JSON with this exact structure:
     {"icon": "emoji", "title": "Feature name", "desc": "1-2 sentences specific to this business"},
     {"icon": "emoji", "title": "Feature name", "desc": "1-2 sentences specific to this business"}
   ],
-  "waMessage": "WhatsApp message in Spanish (3-4 lines max). Start with: Hola [NAME] 👋. Include 1 specific insight about their business. Mention hours saved and annual savings. End with their landing URL placeholder: {URL}. Sign: Rey Martinez | AI50M | Miami, FL",
+  "waMessage": "WhatsApp outreach message in Spanish. NO LINKS. Format exactly:
+
+Hola [NAME] 👋
+
+[1 specific insight about their business — show you did research]
+
+Automatizamos [specific pain point]:
+✓ [Quantified benefit 1]
+✓ [Quantified benefit 2]
+✓ [Quantified benefit 3]
+
+¿Nos damos una llamada de 15 min?
+
+Rey Martinez
+AI50M | Miami, FL
+rey@ai50m.com | 786-969-3419",
   "weeklyHours": 35,
   "annualSavings": 60000
 }`;
@@ -151,13 +160,15 @@ Return ONLY valid JSON with this exact structure:
   }, {
     model: 'claude-haiku-4-5',
     max_tokens: 1200,
-    system: 'You are a B2B sales intelligence engine for AI50M, a Miami-based automation agency. Always return valid JSON only.',
+    system: 'You are a B2B sales intelligence engine for AI50M, a Miami-based automation agency. Always return valid JSON only. WhatsApp messages must NEVER contain URLs or links.',
     messages: [{ role: 'user', content: prompt }]
   });
 
   try {
     const raw = res.body.content[0].text;
-    const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
+    const cleaned = raw.replace(/```json
+?|
+?```/g, '').trim();
     return JSON.parse(cleaned);
   } catch {
     return {
@@ -183,7 +194,20 @@ Return ONLY valid JSON with this exact structure:
         { icon: '⚡', title: 'Automatización de procesos', desc: 'Los flujos repetitivos corren solos: recordatorios, seguimientos, reportes.' },
         { icon: '📊', title: 'Dashboard unificado', desc: 'Todos tus canales y métricas en un solo lugar, en tiempo real.' }
       ],
-      waMessage: `Hola [NAME] 👋\n\nAnalicé las operaciones de ${company} y vi oportunidades claras de automatización.\n\nPodemos ahorrarte 35+ horas/semana y $50K+ anuales.\n\nPropuesta completa: {URL}\n\nRey Martinez | AI50M | Miami, FL`,
+      waMessage: `Hola [NAME] 👋
+
+Analizamos las operaciones de ${company} y detectamos oportunidades claras de automatización.
+
+Podemos ayudarte a:
+✓ Ahorrar 35+ horas/semana en procesos manuales
+✓ Responder a clientes en <60 segundos, 24/7
+✓ Recuperar $50,000+ anuales en eficiencia operacional
+
+¿Nos damos una llamada de 15 min?
+
+Rey Martinez
+AI50M | Miami, FL
+rey@ai50m.com | 786-969-3419`,
       weeklyHours: 35,
       annualSavings: 50000
     };
@@ -195,7 +219,7 @@ function buildLandingPage(slug, company, analysis, pdfUrl) {
   const templatePath = path.join(__dirname, '../templates/landing-page.html');
   let template = fs.readFileSync(templatePath, 'utf-8');
 
-  const landingUrl = `${BASE_URL}/${slug}/`;
+  const landingUrl = `${BASE_URL}/campaigns/${slug}/`;
   
   const data = {
     company,
@@ -220,19 +244,18 @@ function buildLandingPage(slug, company, analysis, pdfUrl) {
     investmentRange: '$800 – $1,600/mes'
   };
 
-  // Inject data into template
   const dataScript = `<script>window.CAMPAIGN_DATA = ${JSON.stringify(data, null, 2)};</script>`;
-  template = template.replace('<script>', dataScript + '\n<script>');
+  template = template.replace('<script>', dataScript + '
+<script>');
 
   return template;
 }
 
 // ── Step 4: Save to GitHub ────────────────────────────────────────────────────
-async function saveToGitHub(filePath, content, message, isBinary = false) {
+async function saveToGitHub(filePath, content, message) {
   const url = `https://api.github.com/repos/${GH_REPO}/contents/${filePath}`;
   const headers = { 'Authorization': `token ${GH_TOKEN}`, 'User-Agent': 'ai50m-campaign-generator' };
   
-  // Check if exists
   let sha;
   try {
     const check = await new Promise((resolve) => {
@@ -243,7 +266,7 @@ async function saveToGitHub(filePath, content, message, isBinary = false) {
     sha = check.sha;
   } catch {}
 
-  const encoded = isBinary ? content.toString('base64') : Buffer.from(content).toString('base64');
+  const encoded = Buffer.from(content).toString('base64');
   const payload = { message, content: encoded, committer: { name: 'AI50M', email: 'rey@ai50m.com' } };
   if (sha) payload.sha = sha;
 
@@ -251,7 +274,7 @@ async function saveToGitHub(filePath, content, message, isBinary = false) {
   return res.status === 200 || res.status === 201;
 }
 
-// ── Step 5: Send WhatsApp ─────────────────────────────────────────────────────
+// ── Step 5: Send WhatsApp (no-link format) ────────────────────────────────────
 async function sendWhatsApp(phone, message) {
   const cleaned = phone.replace(/\D/g, '');
   const jid = (cleaned.startsWith('1') ? cleaned : '1' + cleaned) + '@s.whatsapp.net';
@@ -265,7 +288,8 @@ async function sendWhatsApp(phone, message) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function generateCampaign({ company, website, phone, email, name, industry, sendWhatsapp = false, dryRun = false }) {
-  console.log(`\n🚀 AI50M Campaign Generator`);
+  console.log(`
+🚀 AI50M Campaign Generator v2 (No-Link Strategy)`);
   console.log(`─────────────────────────────`);
   console.log(`📋 Company: ${company}`);
   console.log(`🌐 Website: ${website || 'none'}`);
@@ -274,7 +298,8 @@ async function generateCampaign({ company, website, phone, email, name, industry
   const slug = slugify(company);
   
   // 1. Scrape
-  console.log('\n[1/5] Scraping website...');
+  console.log('
+[1/5] Scraping website...');
   const siteText = await scrapeWebsite(website);
 
   // 2. Analyze
@@ -284,36 +309,51 @@ async function generateCampaign({ company, website, phone, email, name, industry
   const pdfPath = `campaigns/${slug}/propuesta-${slug}.pdf`;
   const landingPath = `campaigns/${slug}/index.html`;
   const pdfUrl = `${BASE_URL}/${pdfPath}`;
-  const landingUrl = `${BASE_URL}/campaigns/${slug}/`;
 
-  // 3. Build landing page
+  // 3. Build landing page (saved but NOT sent in initial WhatsApp)
   console.log('[3/5] Building landing page...');
   const landingHtml = buildLandingPage(slug, company, analysis, pdfUrl);
 
   if (!dryRun) {
-    // 4. Save to GitHub
-    console.log('[4/5] Saving to GitHub...');
+    // 4. Save landing page to GitHub (for when prospect asks for more info)
+    console.log('[4/5] Saving landing page to GitHub...');
     await saveToGitHub(landingPath, landingHtml, `campaign: ${company} — landing page`);
-    console.log(`  ✅ Landing page: ${landingUrl}`);
-  } else {
-    console.log(`  [DRY RUN] Would save: ${landingPath}`);
+    console.log(`  ✅ Landing page ready (for follow-up use)`);
   }
 
-  // 5. Send WhatsApp
+  // 5. Send WhatsApp — NO LINK, direct value prop
   if (sendWhatsapp && phone && !dryRun) {
-    console.log('[5/5] Sending WhatsApp...');
-    const firstName = name?.split(' ')[0] || name || 'hola';
-    const waMessage = analysis.waMessage
-      .replace('[NAME]', firstName)
-      .replace('{URL}', landingUrl);
+    console.log('[5/5] Sending WhatsApp (no-link format)...');
+    const firstName = name?.split(' ')[0] || name || '';
+    
+    // Replace [NAME] with actual name or remove it gracefully
+    let waMessage = analysis.waMessage;
+    if (firstName) {
+      waMessage = waMessage.replace('[NAME]', firstName);
+    } else {
+      waMessage = waMessage.replace('Hola [NAME] 👋', 'Hola 👋');
+    }
+    
+    // Ensure no links slipped through
+    waMessage = waMessage.replace(/\{URL\}/g, '').replace(/https?:\/\/\S+/g, '').trim();
+    
+    console.log('
+📱 WhatsApp message preview:');
+    console.log('─'.repeat(40));
+    console.log(waMessage);
+    console.log('─'.repeat(40));
     
     const sent = await sendWhatsApp(phone, waMessage);
-    console.log(`  ${sent ? '✅' : '❌'} WhatsApp to ${phone}: ${sent ? 'sent' : 'failed'}`);
+    console.log(`
+  ${sent ? '✅' : '❌'} WhatsApp to ${phone}: ${sent ? 'sent' : 'failed'}`);
   }
 
-  console.log('\n─────────────────────────────');
+  const landingUrl = `${BASE_URL}/campaigns/${slug}/`;
+  
+  console.log('
+─────────────────────────────');
   console.log(`✅ Campaign ready:`);
-  console.log(`   Landing: ${landingUrl}`);
+  console.log(`   Landing (for follow-up): ${landingUrl}`);
   console.log(`   Slug:    ${slug}`);
   console.log(`   Hours/week saved: ${analysis.weeklyHours}`);
   console.log(`   Annual savings:   $${(analysis.annualSavings || 0).toLocaleString()}`);
