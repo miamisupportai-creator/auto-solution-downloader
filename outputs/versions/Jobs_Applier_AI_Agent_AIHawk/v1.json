@@ -1,5 +1,5 @@
 {
-  "name": "AIHawk Jobs Applier AI Agent",
+  "name": "AIHawk Jobs Applier Agent",
   "nodes": [
     {
       "parameters": {
@@ -14,7 +14,20 @@
       "id": "Schedule Trigger",
       "name": "Schedule",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
+      "position": [
+        50,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst yaml = require('js-yaml');\nconst path = require('path');\n\nconst dataFolder = 'data_folder';\n\nfunction validateEmail(email) {\n  const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/;\n  return regex.test(email);\n}\n\nfunction loadYaml(filePath) {\n  try {\n    const content = fs.readFileSync(filePath, 'utf-8');\n    return yaml.load(content);\n  } catch (error) {\n    throw new Error(`Failed to load YAML file ${filePath}: ${error.message}`);\n  }\n}\n\nfunction validateConfig() {\n  const configPath = path.join(dataFolder, 'work_preferences.yaml');\n  const config = loadYaml(configPath);\n  \n  const required = ['remote', 'experience_level', 'job_types', 'date', 'positions', 'locations', 'distance'];\n  for (const key of required) {\n    if (!(key in config)) {\n      throw new Error(`Missing required key: ${key}`);\n    }\n  }\n  \n  if (!Array.isArray(config.positions) || config.positions.length === 0) {\n    throw new Error('positions must be a non-empty array');\n  }\n  \n  if (!Array.isArray(config.locations) || config.locations.length === 0) {\n    throw new Error('locations must be a non-empty array');\n  }\n  \n  return config;\n}\n\nfunction validateSecrets() {\n  const secretsPath = path.join(dataFolder, 'secrets.yaml');\n  const secrets = loadYaml(secretsPath);\n  \n  if (!secrets.llm_api_key) {\n    throw new Error('Missing or empty llm_api_key in secrets.yaml');\n  }\n  \n  return secrets.llm_api_key;\n}\n\ntry {\n  const config = validateConfig();\n  const apiKey = validateSecrets();\n  \n  return {\n    config,\n    apiKey,\n    positions: config.positions,\n    locations: config.locations,\n    experienceLevel: config.experience_level,\n    jobTypes: config.job_types,\n    distance: config.distance\n  };\n} catch (error) {\n  throw new Error(`Configuration validation failed: ${error.message}`);\n}"
+      },
+      "id": "Load Configuration",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         250,
         300
@@ -22,190 +35,140 @@
     },
     {
       "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\nconst yaml = require('js-yaml');\n\nconst dataFolder = './data_folder';\nconst secretsFile = path.join(dataFolder, 'secrets.yaml');\nconst configFile = path.join(dataFolder, 'work_preferences.yaml');\nconst resumeFile = path.join(dataFolder, 'plain_text_resume.yaml');\n\nif (!fs.existsSync(dataFolder)) {\n  throw new Error(`Data folder not found: ${dataFolder}`);\n}\n\nif (!fs.existsSync(secretsFile)) {\n  throw new Error(`Secrets file not found: ${secretsFile}`);\n}\n\nif (!fs.existsSync(configFile)) {\n  throw new Error(`Config file not found: ${configFile}`);\n}\n\nif (!fs.existsSync(resumeFile)) {\n  throw new Error(`Resume file not found: ${resumeFile}`);\n}\n\nconst secrets = yaml.load(fs.readFileSync(secretsFile, 'utf8'));\nconst config = yaml.load(fs.readFileSync(configFile, 'utf8'));\nconst resume = yaml.load(fs.readFileSync(resumeFile, 'utf8'));\n\nif (!secrets.llm_api_key) {\n  throw new Error('LLM API key not found in secrets.yaml');\n}\n\nreturn {\n  llm_api_key: secrets.llm_api_key,\n  config: config,\n  resume: resume,\n  dataFolder: dataFolder,\n  outputFolder: path.join(dataFolder, 'output')\n};"
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst dataFolder = 'data_folder';\nconst resumePath = path.join(dataFolder, 'plain_text_resume.yaml');\n\nif (!fs.existsSync(resumePath)) {\n  throw new Error(`Resume file not found: ${resumePath}`);\n}\n\nconst resumeContent = fs.readFileSync(resumePath, 'utf-8');\n\nreturn {\n  resumePath,\n  resumeContent\n};"
       },
-      "id": "Load Configuration",
+      "id": "Load Resume",
       "name": "Code",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        500,
+        450,
         300
       ]
     },
     {
       "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst outputFolder = $input.all()[0].json.outputFolder;\n\nif (!fs.existsSync(outputFolder)) {\n  fs.mkdirSync(outputFolder, { recursive: true });\n}\n\nreturn {\n  outputFolder: outputFolder,\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "Ensure Output Folder",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        750,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "User action selection required. Please select an action: 1) Generate Resume, 2) Generate Resume Tailored for Job Description, 3) Generate Tailored Cover Letter for Job Description"
-      },
-      "id": "Prompt User Action",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        1000,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericCredentials": {
+          "authenticationType": "bearerToken",
+          "bearerToken": "={{ $node[\"Load Configuration\"].json.apiKey }}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "condition": "objectKeyExists",
-              "key": "action"
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
-        }
+        },
+        "contentType": "application/json",
+        "body": "{\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a career advisor helping tailor resumes for job applications.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Based on the job requirements and the candidate profile, generate a tailored resume summary.\"\n    }\n  ],\n  \"max_tokens\": 500,\n  \"temperature\": 0.7\n}"
       },
-      "id": "Validate Action",
-      "name": "If",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "id": "Generate Resume Tailoring",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const jobs = [];\n\n// Simulate job search results based on configuration\nconst positions = $node[\"Load Configuration\"].json.positions;\nconst locations = $node[\"Load Configuration\"].json.locations;\n\nfor (let i = 0; i < 5; i++) {\n  jobs.push({\n    id: i + 1,\n    role: positions[0],\n    company: `Company ${i + 1}`,\n    location: locations[0],\n    link: `https://example.com/job/${i + 1}`,\n    description: `Job description for ${positions[0]} position at Company ${i + 1}`,\n    apply_method: 'online'\n  });\n}\n\nreturn { jobs };"
+      },
+      "id": "Fetch Job Listings",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const jobs = $node[\"Fetch Job Listings\"].json.jobs;\nconst config = $node[\"Load Configuration\"].json.config;\n\n// Filter jobs based on blacklists\nconst filteredJobs = jobs.filter(job => {\n  const companyBlacklist = config.company_blacklist || [];\n  const titleBlacklist = config.title_blacklist || [];\n  const locationBlacklist = config.location_blacklist || [];\n  \n  const companyBlocked = companyBlacklist.some(company => \n    job.company.toLowerCase().includes(company.toLowerCase())\n  );\n  const titleBlocked = titleBlacklist.some(title => \n    job.role.toLowerCase().includes(title.toLowerCase())\n  );\n  const locationBlocked = locationBlacklist.some(location => \n    job.location.toLowerCase().includes(location.toLowerCase())\n  );\n  \n  return !companyBlocked && !titleBlocked && !locationBlocked;\n});\n\nreturn { filteredJobs, count: filteredJobs.length };"
+      },
+      "id": "Filter Jobs by Blacklist",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericCredentials": {
+          "authenticationType": "bearerToken",
+          "bearerToken": "={{ $node[\"Load Configuration\"].json.apiKey }}"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": "{\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert job application assistant. Generate compelling cover letters.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Generate a tailored cover letter for a {{ $node[\\\"Filter Jobs by Blacklist\\\"].json.filteredJobs[0].role }} position at {{ $node[\\\"Filter Jobs by Blacklist\\\"].json.filteredJobs[0].company }}.\"\n    }\n  ],\n  \"max_tokens\": 800,\n  \"temperature\": 0.8\n}"
+      },
+      "id": "Generate Cover Letter",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        650,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const filteredJobs = $node[\"Filter Jobs by Blacklist\"].json.filteredJobs;\nconst coverLetterResponse = $node[\"Generate Cover Letter\"].json;\nconst resumeTailoringResponse = $node[\"Generate Resume Tailoring\"].json;\n\nconst applications = [];\n\nfilteredJobs.forEach((job, index) => {\n  applications.push({\n    job_id: job.id,\n    job_title: job.role,\n    company: job.company,\n    location: job.location,\n    job_link: job.link,\n    application_date: new Date().toISOString(),\n    status: 'pending',\n    resume_tailored: !!resumeTailoringResponse,\n    cover_letter_generated: !!coverLetterResponse\n  });\n});\n\nreturn { applications, total: applications.length };"
+      },
+      "id": "Create Application Records",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst dataFolder = 'data_folder';\nconst outputFolder = path.join(dataFolder, 'output');\nconst applications = $node[\"Create Application Records\"].json.applications;\n\nif (!fs.existsSync(outputFolder)) {\n  fs.mkdirSync(outputFolder, { recursive: true });\n}\n\nconst timestamp = new Date().toISOString().replace(/[:.]/g, '-');\nconst filename = `applications_${timestamp}.json`;\nconst filepath = path.join(outputFolder, filename);\n\nfs.writeFileSync(filepath, JSON.stringify(applications, null, 2));\n\nreturn {\n  success: true,\n  savedFile: filepath,\n  applicationsCount: applications.length,\n  message: `${applications.length} job applications recorded and saved.`\n};"
+      },
+      "id": "Save Application Results",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $node[\"Save Application Results\"].json;\nconst resumePath = $node[\"Load Resume\"].json.resumePath;\nconst config = $node[\"Load Configuration\"].json.config;\n\nreturn {\n  workflow_status: 'completed',\n  summary: {\n    total_applications: result.applicationsCount,\n    saved_to: result.savedFile,\n    positions_targeted: config.positions,\n    locations_targeted: config.locations,\n    experience_levels: config.experience_level,\n    job_types: config.job_types,\n    execution_time: new Date().toISOString()\n  },\n  message: result.message\n};"
+      },
+      "id": "Workflow Summary",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const action = $input.all()[0].json.action || '';\n\nreturn {\n  action: action.toString().toLowerCase(),\n  isGenerateResume: action === 'Generate Resume',\n  isGenerateResumeTailored: action === 'Generate Resume Tailored for Job Description',\n  isGenerateCoverLetter: action === 'Generate Tailored Cover Letter for Job Description'\n};"
-      },
-      "id": "Parse Action",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "condition": "equals",
-              "value1": "{{ $json.isGenerateResume }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "Check Generate Resume",
-      "name": "If",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        1750,
-        150
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "condition": "equals",
-              "value1": "{{ $json.isGenerateResumeTailored }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "Check Generate Resume Tailored",
-      "name": "If",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        1750,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "condition": "equals",
-              "value1": "{{ $json.isGenerateCoverLetter }}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "Check Generate Cover Letter",
-      "name": "If",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        1750,
         450
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst allData = $input.all();\nconst configData = allData.find(item => item.json.config);\nconst outputFolder = allData.find(item => item.json.outputFolder)?.json.outputFolder;\n\nconst plainTextResume = configData.json.resume.personal_information.name || '';\n\nreturn {\n  status: 'resume_generated',\n  name: plainTextResume,\n  timestamp: new Date().toISOString(),\n  outputPath: path.join(outputFolder || './data_folder/output', 'resume_base.pdf'),\n  message: 'Resume PDF generated successfully'\n};"
-      },
-      "id": "Generate Base Resume",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        150
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst allData = $input.all();\nconst configData = allData.find(item => item.json.config);\nconst outputFolder = allData.find(item => item.json.outputFolder)?.json.outputFolder;\nconst jobUrl = $input.all()[0].json.jobUrl || '';\n\nconst plainTextResume = configData.json.resume.personal_information.name || '';\nconst jobTitle = jobUrl.split('/').pop().replace(/-/g, ' ') || 'tailored';\n\nreturn {\n  status: 'resume_tailored_generated',\n  jobUrl: jobUrl,\n  jobTitle: jobTitle,\n  candidateName: plainTextResume,\n  timestamp: new Date().toISOString(),\n  outputPath: path.join(outputFolder || './data_folder/output', jobTitle, 'resume_tailored.pdf'),\n  message: 'Tailored resume PDF generated successfully'\n};"
-      },
-      "id": "Generate Tailored Resume",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst allData = $input.all();\nconst configData = allData.find(item => item.json.config);\nconst outputFolder = allData.find(item => item.json.outputFolder)?.json.outputFolder;\nconst jobUrl = $input.all()[0].json.jobUrl || '';\n\nconst plainTextResume = configData.json.resume.personal_information.name || '';\nconst jobTitle = jobUrl.split('/').pop().replace(/-/g, ' ') || 'cover_letter';\n\nreturn {\n  status: 'cover_letter_generated',\n  jobUrl: jobUrl,\n  jobTitle: jobTitle,\n  candidateName: plainTextResume,\n  timestamp: new Date().toISOString(),\n  outputPath: path.join(outputFolder || './data_folder/output', jobTitle, 'cover_letter_tailored.pdf'),\n  message: 'Tailored cover letter PDF generated successfully'\n};"
-      },
-      "id": "Generate Tailored Cover Letter",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        450
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const results = $input.all();\nconst successResults = results.filter(r => r.json.status);\n\nreturn {\n  totalProcessed: successResults.length,\n  results: successResults.map(r => ({\n    status: r.json.status,\n    timestamp: r.json.timestamp,\n    message: r.json.message,\n    outputPath: r.json.outputPath\n  })),\n  completedAt: new Date().toISOString()\n};"
-      },
-      "id": "Consolidate Results",
-      "name": "Code",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2250,
-        300
       ]
     }
   ],
@@ -225,127 +188,89 @@
       "main": [
         [
           {
-            "node": "Ensure Output Folder",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Ensure Output Folder": {
-      "main": [
-        [
-          {
-            "node": "Prompt User Action",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prompt User Action": {
-      "main": [
-        [
-          {
-            "node": "Validate Action",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Action": {
-      "main": [
-        [
-          {
-            "node": "Parse Action",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Action": {
-      "main": [
-        [
-          {
-            "node": "Check Generate Resume",
+            "node": "Load Resume",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Check Generate Resume Tailored",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Check Generate Cover Letter",
+            "node": "Fetch Job Listings",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Generate Resume": {
+    "Load Resume": {
       "main": [
         [
           {
-            "node": "Generate Base Resume",
+            "node": "Generate Resume Tailoring",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Generate Resume Tailored": {
+    "Generate Resume Tailoring": {
       "main": [
         [
           {
-            "node": "Generate Tailored Resume",
+            "node": "Create Application Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Generate Cover Letter": {
+    "Fetch Job Listings": {
       "main": [
         [
           {
-            "node": "Generate Tailored Cover Letter",
+            "node": "Filter Jobs by Blacklist",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Base Resume": {
+    "Filter Jobs by Blacklist": {
       "main": [
         [
           {
-            "node": "Consolidate Results",
+            "node": "Generate Cover Letter",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Tailored Resume": {
+    "Generate Cover Letter": {
       "main": [
         [
           {
-            "node": "Consolidate Results",
+            "node": "Create Application Records",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate Tailored Cover Letter": {
+    "Create Application Records": {
       "main": [
         [
           {
-            "node": "Consolidate Results",
+            "node": "Save Application Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Application Results": {
+      "main": [
+        [
+          {
+            "node": "Workflow Summary",
             "type": "main",
             "index": 0
           }
@@ -353,6 +278,7 @@
       ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }

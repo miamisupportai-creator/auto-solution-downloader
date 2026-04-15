@@ -11,9 +11,9 @@
           ]
         }
       },
-      "id": "schedule-trigger",
+      "id": "trigger-schedule",
       "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
       "position": [
         250,
@@ -22,13 +22,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/workflows",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth"
+        "method": "POST",
+        "url": "=https://api.dify.ai/v1/workflows/run",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": "{\n  \"inputs\": {\n    \"query\": \"{{ $node[\\\"input-data\\\"].json.query }}\"\n  },\n  \"user\": \"n8n-user\"\n}"
       },
-      "id": "fetch-workflows",
-      "name": "Fetch Workflows",
+      "id": "dify-workflow-execute",
+      "name": "Execute Dify Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
@@ -36,83 +47,7 @@
         300
       ],
       "credentials": {
-        "httpHeaderAuth": "dify_api_key"
-      }
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/models",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth"
-      },
-      "id": "fetch-models",
-      "name": "Fetch Supported Models",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        650,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": "dify_api_key"
-      }
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/datasets",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth"
-      },
-      "id": "fetch-datasets",
-      "name": "Fetch RAG Datasets",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": "dify_api_key"
-      }
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/agents",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth"
-      },
-      "id": "fetch-agents",
-      "name": "Fetch Agents",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1050,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": "dify_api_key"
-      }
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/apps",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth"
-      },
-      "id": "fetch-apps",
-      "name": "Fetch Applications",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1250,
-        300
-      ],
-      "credentials": {
-        "httpHeaderAuth": "dify_api_key"
+        "httpHeaderAuth": "dify_api_credentials"
       }
     },
     {
@@ -120,196 +55,363 @@
         "assignments": {
           "assignments": [
             {
-              "name": "workflows",
-              "value": "{{ $node[\"Fetch Workflows\"].json.data }}"
+              "name": "workflow_id",
+              "value": "={{ $node[\\\"dify-workflow-execute\\\"].json.workflow_run_id }}"
             },
             {
-              "name": "models",
-              "value": "{{ $node[\"Fetch Supported Models\"].json.data }}"
+              "name": "status",
+              "value": "={{ $node[\\\"dify-workflow-execute\\\"].json.status }}"
             },
             {
-              "name": "datasets",
-              "value": "{{ $node[\"Fetch RAG Datasets\"].json.data }}"
-            },
-            {
-              "name": "agents",
-              "value": "{{ $node[\"Fetch Agents\"].json.data }}"
-            },
-            {
-              "name": "applications",
-              "value": "{{ $node[\"Fetch Applications\"].json.data }}"
+              "name": "output",
+              "value": "={{ $node[\\\"dify-workflow-execute\\\"].json.data }}"
             }
           ]
         }
       },
-      "id": "aggregate-data",
-      "name": "Aggregate Platform Data",
+      "id": "transform-response",
+      "name": "Transform Response",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        1450,
+        650,
         300
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.dify.ai/v1/completion-messages",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendBody": true,
+        "url": "=https://api.dify.ai/v1/chat-messages",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        },
         "contentType": "application/json",
-        "body": {
-          "inputs": {},
-          "query": "Summarize the current state of all workflows, models, datasets, agents and applications"
-        }
+        "body": "{\n  \"inputs\": {\n    \"user_message\": \"{{ $node[\\\"input-data\\\"].json.message }}\"\n  },\n  \"response_mode\": \"blocking\",\n  \"user\": \"n8n-chat-user\"\n}"
       },
-      "id": "llm-analysis",
-      "name": "LLM Analysis",
+      "id": "dify-chat-message",
+      "name": "Send Chat Message to Dify",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1650,
+        450,
+        450
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.dify.ai/v1/workflows/{{ $node[\\\"transform-response\\\"].json.workflow_id }}",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        }
+      },
+      "id": "get-workflow-status",
+      "name": "Get Workflow Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
         300
       ],
       "credentials": {
-        "httpHeaderAuth": "dify_api_key"
+        "httpHeaderAuth": "dify_api_credentials"
       }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.dify.ai/v1/logging/telemetry",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendBody": true,
+        "url": "=https://api.dify.ai/v1/rag/documents",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        },
         "contentType": "application/json",
-        "body": {
-          "event": "platform_monitoring",
-          "timestamp": "{{ $now.toIso() }}",
-          "data": "{{ $node[\"Aggregate Platform Data\"].json }}"
-        }
+        "body": "{\n  \"name\": \"{{ $node[\\\"input-data\\\"].json.document_name }}\",\n  \"content\": \"{{ $node[\\\"input-data\\\"].json.content }}\",\n  \"data_source\": \"{{ $node[\\\"input-data\\\"].json.data_source }}\"\n}"
       },
-      "id": "send-telemetry",
-      "name": "Send Telemetry",
+      "id": "rag-document-upload",
+      "name": "Upload RAG Document",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1850,
-        300
+        450,
+        600
       ],
       "credentials": {
-        "httpHeaderAuth": "dify_api_key"
+        "httpHeaderAuth": "dify_api_credentials"
       }
     },
     {
       "parameters": {
-        "text": "=== Dify Platform Monitoring Report ===\n\nWorkflows: {{ $node[\"Aggregate Platform Data\"].json.workflows.length }} active\nModels: {{ $node[\"Aggregate Platform Data\"].json.models.length }} available\nDatasets: {{ $node[\"Aggregate Platform Data\"].json.datasets.length }} configured\nAgents: {{ $node[\"Aggregate Platform Data\"].json.agents.length }} deployed\nApplications: {{ $node[\"Aggregate Platform Data\"].json.applications.length }} running\n\nLLM Analysis:\n{{ $node[\"LLM Analysis\"].json.answer }}\n\nStatus: COMPLETE\nTimestamp: {{ $now.toIso() }}"
+        "method": "GET",
+        "url": "=https://api.dify.ai/v1/models",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        }
       },
-      "id": "output-report",
-      "name": "Output Monitoring Report",
+      "id": "list-available-models",
+      "name": "List Available Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        250,
+        600
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.dify.ai/v1/agents/run",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $credentials.difyApiKey }}"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": "{\n  \"agent_id\": \"{{ $node[\\\"input-data\\\"].json.agent_id }}\",\n  \"tools\": {{ $node[\\\"input-data\\\"].json.tools }},\n  \"query\": \"{{ $node[\\\"input-data\\\"].json.query }}\"\n}"
+      },
+      "id": "execute-agent",
+      "name": "Execute Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        650,
+        450
+      ],
+      "credentials": {
+        "httpHeaderAuth": "dify_api_credentials"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "condition": "equal",
+              "leftValue": "={{ $node[\\\"get-workflow-status\\\"].json.status }}",
+              "rightValue": "completed"
+            }
+          ]
+        }
+      },
+      "id": "check-completion",
+      "name": "Check Completion Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "final_output",
+              "value": "={{ $node[\\\"transform-response\\\"].json.output }}"
+            },
+            {
+              "name": "execution_status",
+              "value": "=completed"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "prepare-final-output",
+      "name": "Prepare Final Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.3,
       "position": [
-        2050,
+        1250,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $node[\\\"input-data\\\"].json.webhook_url }}",
+        "contentType": "application/json",
+        "body": "={\n  \"status\": \"{{ $node[\\\"prepare-final-output\\\"].json.execution_status }}\",\n  \"output\": {{ JSON.stringify($node[\\\"prepare-final-output\\\"].json.final_output) }},\n  \"timestamp\": \"{{ $node[\\\"prepare-final-output\\\"].json.timestamp }}\"\n}"
+      },
+      "id": "send-webhook-notification",
+      "name": "Send Webhook Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1450,
+        200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "input-data",
+      "name": "Input Data",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        100,
         300
       ]
     }
   ],
   "connections": {
-    "schedule-trigger": {
+    "trigger-schedule": {
       "main": [
         [
           {
-            "node": "fetch-workflows",
+            "node": "input-data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-workflows": {
+    "input-data": {
       "main": [
         [
           {
-            "node": "fetch-models",
+            "node": "dify-workflow-execute",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "list-available-models",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "dify-chat-message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-models": {
+    "dify-workflow-execute": {
       "main": [
         [
           {
-            "node": "fetch-datasets",
+            "node": "transform-response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-datasets": {
+    "transform-response": {
       "main": [
         [
           {
-            "node": "fetch-agents",
+            "node": "get-workflow-status",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-agents": {
+    "dify-chat-message": {
       "main": [
         [
           {
-            "node": "fetch-apps",
+            "node": "execute-agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch-apps": {
+    "get-workflow-status": {
       "main": [
         [
           {
-            "node": "aggregate-data",
+            "node": "check-completion",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "aggregate-data": {
+    "check-completion": {
       "main": [
         [
           {
-            "node": "llm-analysis",
+            "node": "prepare-final-output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "rag-document-upload",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "llm-analysis": {
+    "prepare-final-output": {
       "main": [
         [
           {
-            "node": "send-telemetry",
+            "node": "send-webhook-notification",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "send-telemetry": {
+    "execute-agent": {
       "main": [
         [
           {
-            "node": "output-report",
+            "node": "prepare-final-output",
             "type": "main",
             "index": 0
           }
@@ -317,7 +419,7 @@
       ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1"
   }
