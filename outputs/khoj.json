@@ -1,174 +1,194 @@
 {
-  "name": "Khoj Desktop File Sync Workflow",
+  "name": "Khoj Content Sync Workflow",
   "nodes": [
     {
       "parameters": {
-        "unit": "minutes",
-        "value": 10
+        "rule": "0 */10 * * * *"
       },
-      "id": "schedule-sync",
+      "id": "Schedule Sync",
       "name": "Schedule Sync",
-      "type": "n8n-nodes-base.interval",
+      "type": "n8n-nodes-base.cron",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
+      "position": [250, 300]
     },
     {
       "parameters": {
-        "functionCode": "// Get stored configuration\nconst khojToken = $env.KHOJ_TOKEN || '';\nconst hostURL = $env.KHOJ_HOST_URL || 'https://app.khoj.dev';\nconst filesToSync = $env.FILES_TO_SYNC ? JSON.parse($env.FILES_TO_SYNC) : [];\nconst foldersToSync = $env.FOLDERS_TO_SYNC ? JSON.parse($env.FOLDERS_TO_SYNC) : [];\n\nif (!khojToken || khojToken === '') {\n  return { error: 'Khoj token not configured', syncing: false };\n}\n\nif (!hostURL || hostURL === '') {\n  return { error: 'Khoj host URL not configured', syncing: false };\n}\n\nreturn {\n  khojToken,\n  hostURL,\n  filesToSync,\n  foldersToSync,\n  ready: true\n};"
-      },
-      "id": "load-config",
-      "name": "Load Configuration",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst validFileTypes = [\n  'org', 'md', 'markdown', 'txt', 'html', 'xml',\n  'appleplist', 'asm', 'asp', 'batch', 'c', 'cs', 'css', 'csv', 'eml', 'go',\n  'ini', 'internetshortcut', 'java', 'javascript', 'json', 'latex', 'lisp',\n  'makefile', 'mht', 'mum', 'pem', 'perl', 'php', 'powershell', 'python',\n  'rdf', 'rst', 'rtf', 'ruby', 'rust', 'scala', 'shell', 'smali', 'sql',\n  'svg', 'symlinktext', 'vba', 'winregistry', 'yaml',\n  'pdf', 'jpg', 'jpeg', 'png', 'webp'\n];\n\nfunction isSupportedFileType(filePath) {\n  const ext = filePath.split('.').pop().toLowerCase();\n  return validFileTypes.includes(ext);\n}\n\nfunction processDirectory(folderPath, results = []) {\n  try {\n    const files = fs.readdirSync(folderPath, { withFileTypes: true });\n    for (const file of files) {\n      if (file.name.startsWith('.')) continue;\n      const fullPath = path.join(folderPath, file.name);\n      if (file.isFile() && isSupportedFileType(fullPath)) {\n        results.push(fullPath);\n      } else if (file.isDirectory()) {\n        processDirectory(fullPath, results);\n      }\n    }\n  } catch (err) {\n    console.error(`Error reading ${folderPath}: ${err.message}`);\n  }\n  return results;\n}\n\nconst filesToSync = $input.all()[0].json.filesToSync || [];\nconst foldersToSync = $input.all()[0].json.foldersToSync || [];\nconst filesToPush = [];\n\n// Add individual files\nfor (const file of filesToSync) {\n  if (fs.existsSync(file.path)) {\n    filesToPush.push(file.path);\n  }\n}\n\n// Add files from folders\nfor (const folder of foldersToSync) {\n  if (fs.existsSync(folder.path)) {\n    processDirectory(folder.path, filesToPush);\n  }\n}\n\nreturn { filesToPush };"
-      },
-      "id": "collect-files",
-      "name": "Collect Files to Sync",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        650,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\n\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\n\nfunction filenameToMimeType(filename) {\n  const ext = filename.split('.').pop().toLowerCase();\n  const mimeMap = {\n    'pdf': 'application/pdf',\n    'png': 'image/png',\n    'jpg': 'image/jpeg',\n    'jpeg': 'image/jpeg',\n    'webp': 'image/webp',\n    'md': 'text/markdown',\n    'markdown': 'text/markdown',\n    'org': 'text/org'\n  };\n  return mimeMap[ext] || 'text/plain';\n}\n\nconst filesToPush = $input.all()[0].json.filesToPush || [];\nconst filesData = [];\nconst lastSync = $env.LAST_SYNC ? JSON.parse($env.LAST_SYNC) : [];\nconst regenerate = $input.all()[1]?.json?.regenerate || false;\n\nfor (const filePath of filesToPush) {\n  const stats = fs.statSync(filePath);\n  \n  if (!regenerate) {\n    const lastSyncedFile = lastSync.find(f => f.path === filePath);\n    if (lastSyncedFile && stats.mtime.toISOString() < lastSyncedFile.datetime) {\n      continue;\n    }\n  }\n\n  try {\n    const ext = filePath.split('.').pop().toLowerCase();\n    const encoding = binaryFileTypes.includes(ext) ? 'binary' : 'utf8';\n    const mimeType = filenameToMimeType(filePath) + (encoding === 'utf8' ? '; charset=UTF-8' : '');\n    const fileContent = fs.readFileSync(filePath, { encoding });\n    \n    filesData.push({\n      path: filePath,\n      mimeType: mimeType,\n      content: fileContent,\n      encoding: encoding\n    });\n  } catch (err) {\n    console.error(`Error reading file ${filePath}: ${err.message}`);\n  }\n}\n\nreturn { filesData };"
-      },
-      "id": "prepare-files",
-      "name": "Prepare File Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        850,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "={{ $input.all()[1].json.hostURL }}/api/content?client=desktop",
-        "method": "PATCH",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": []
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $input.all()[1].json.khojToken }}"
-            }
-          ]
-        },
+        "resource": "file",
+        "operation": "list",
+        "path": "={{ $env.SYNC_DIRECTORY || '/data' }}",
         "options": {
-          "timeout": 300000
+          "recursive": true
         }
       },
-      "id": "sync-to-khoj",
+      "id": "List Files",
+      "name": "List Files",
+      "type": "n8n-nodes-base.fileSystem",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const validFileTypes = ['org', 'md', 'markdown', 'txt', 'html', 'xml', 'pdf', 'jpg', 'jpeg', 'png', 'webp', 'csv', 'json', 'py', 'js', 'ts', 'go', 'rs', 'java', 'c', 'cpp', 'sh', 'bash'];\n\nconst files = $input.all();\nconst filteredFiles = [];\n\nfor (const file of files) {\n  if (file.type === 'file') {\n    const ext = file.name.split('.').pop().toLowerCase();\n    if (validFileTypes.includes(ext)) {\n      filteredFiles.push({\n        path: file.fullPath,\n        name: file.name,\n        extension: ext,\n        type: 'file'\n      });\n    }\n  }\n}\n\nreturn filteredFiles;"
+      },
+      "id": "Filter Valid Files",
+      "name": "Filter Valid Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.KHOJ_API_URL }}/api/v1/user",
+        "authentication": "genericCredentialType",
+        "genericCredentials": {
+          "authenticationType": "bearerToken",
+          "genericCredentials": "={{ $env.KHOJ_API_TOKEN }}"
+        }
+      },
+      "id": "Get User Info",
+      "name": "Get User Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 150]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.KHOJ_API_URL }}/api/content?client=n8n",
+        "authentication": "genericCredentialType",
+        "genericCredentials": {
+          "authenticationType": "bearerToken",
+          "genericCredentials": "={{ $env.KHOJ_API_TOKEN }}"
+        },
+        "options": {
+          "formData": {}
+        }
+      },
+      "id": "Sync Files to Khoj",
       "name": "Sync Files to Khoj",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        1050,
-        300
-      ]
+      "position": [850, 300],
+      "onError": "continueErrorHandling"
     },
     {
       "parameters": {
-        "functionCode": "// Handle successful sync response\nconst response = $input.all()[0].json.body;\nconst filesData = $input.all()[1].json.filesData || [];\n\nconst syncedFiles = filesData.map(file => ({\n  path: file.path,\n  datetime: new Date().toISOString()\n}));\n\nreturn {\n  success: true,\n  syncedFiles: syncedFiles,\n  lastSync: new Date().toISOString()\n};"
+        "jsCode": "const response = $input.first().json;\n\nif (response.status === 429) {\n  return {\n    error: true,\n    message: 'Rate limited - out of space',\n    status: 429\n  };\n}\n\nif (response.error) {\n  return {\n    error: true,\n    message: response.error,\n    timestamp: new Date().toISOString()\n  };\n}\n\nreturn {\n  success: true,\n  filesProcessed: response.count || 0,\n  timestamp: new Date().toISOString()\n};"
       },
-      "id": "update-last-sync",
-      "name": "Update Last Sync",
+      "id": "Process Sync Response",
+      "name": "Process Sync Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1250,
-        300
-      ]
+      "position": [1050, 300]
     },
     {
       "parameters": {
-        "functionCode": "const error = $input.all()[0].json.error;\nconst errorMessage = error?.message || 'Unknown sync error';\n\nreturn {\n  success: false,\n  error: errorMessage,\n  timestamp: new Date().toISOString()\n};"
+        "method": "POST",
+        "url": "={{ $env.WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event",
+              "value": "sync_complete"
+            },
+            {
+              "name": "status",
+              "value": "={{ $node['Process Sync Response'].json.success }}"
+            },
+            {
+              "name": "filesProcessed",
+              "value": "={{ $node['Process Sync Response'].json.filesProcessed }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $node['Process Sync Response'].json.timestamp }}"
+            }
+          ]
+        }
       },
-      "id": "handle-sync-error",
+      "id": "Notify Webhook",
+      "name": "Notify Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300],
+      "onError": "continueErrorHandling"
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json;\nreturn {\n  status: 'error',\n  message: error.message || 'Sync failed',\n  error_code: error.status || 'UNKNOWN',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "Handle Sync Error",
       "name": "Handle Sync Error",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1250,
-        450
-      ]
+      "position": [1050, 450]
     }
   ],
   "connections": {
-    "schedule-sync": {
+    "Schedule Sync": {
       "main": [
         [
           {
-            "node": "load-config",
+            "node": "List Files",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "load-config": {
+    "List Files": {
       "main": [
         [
           {
-            "node": "collect-files",
+            "node": "Filter Valid Files",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "collect-files": {
+    "Filter Valid Files": {
       "main": [
         [
           {
-            "node": "prepare-files",
+            "node": "Get User Info",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync Files to Khoj",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "prepare-files": {
+    "Sync Files to Khoj": {
       "main": [
         [
           {
-            "node": "sync-to-khoj",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "sync-to-khoj": {
-      "main": [
-        [
-          {
-            "node": "update-last-sync",
+            "node": "Process Sync Response",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "handle-sync-error",
+            "node": "Handle Sync Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Sync Response": {
+      "main": [
+        [
+          {
+            "node": "Notify Webhook",
             "type": "main",
             "index": 0
           }
@@ -176,11 +196,8 @@
       ]
     }
   },
+  "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveDataErrorExecution": "all",
-    "saveDataSuccessExecution": "all",
-    "saveManualExecutions": true,
-    "timezone": "UTC"
+    "executionOrder": "v1"
   }
 }
