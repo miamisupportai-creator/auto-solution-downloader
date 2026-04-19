@@ -3,45 +3,30 @@
   "nodes": [
     {
       "parameters": {
-        "trigger": "everyDay",
-        "hour": 2,
-        "minute": 0
+        "triggerTimes": [
+          {
+            "mode": "everyWeek",
+            "week": "Monday",
+            "hour": 2,
+            "minute": 0
+          }
+        ]
       },
-      "id": "Schedule_Trigger",
+      "id": "trigger-schedule",
       "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [50, 300]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth"
-      },
-      "id": "Get_Latest_Release",
-      "name": "Get Latest Release",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [250, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const release = $input.first().json;\nreturn {\n  version: release.tag_name.replace('v', ''),\n  assets: release.assets.map(a => ({\n    name: a.name,\n    download_url: a.browser_download_url,\n    size: a.size\n  }))\n};"
-      },
-      "id": "Parse_Release_Info",
-      "name": "Parse Release Info",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [450, 300]
+      "position": [
+        50,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/create",
+        "url": "https://api.vercel.com/v1/sandbox",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -51,368 +36,491 @@
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "teamId": "={{ $env.SANDBOX_VERCEL_TEAM_ID }}",
-            "projectId": "={{ $env.SANDBOX_VERCEL_PROJECT_ID }}",
-            "runtime": "node22",
-            "resources": {
-              "vcpus": 8
-            }
+          "teamId": "{{ $env.SANDBOX_VERCEL_TEAM_ID }}",
+          "projectId": "{{ $env.SANDBOX_VERCEL_PROJECT_ID }}",
+          "runtime": "node22",
+          "resources": {
+            "vcpus": 8
           }
         }
       },
-      "id": "Create_Sandbox",
+      "id": "create-sandbox",
       "name": "Create Sandbox",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [650, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const sandbox = $input.first().json;\nreturn {\n  sandboxId: sandbox.id,\n  status: 'created',\n  createdAt: new Date().toISOString()\n};"
-      },
-      "id": "Extract_Sandbox_ID",
-      "name": "Extract Sandbox ID",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [850, 300]
+      "position": [
+        250,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "command": "sh",
-            "args": [
-              "-c",
-              "sudo dnf install -y gcc gcc-c++ make perl-core openssl-devel nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs"
-            ]
-          }
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "sudo dnf clean all && sudo dnf install -y --skip-broken nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs"
+          ]
         }
       },
-      "id": "Install_Dependencies",
-      "name": "Install Dependencies",
+      "id": "install-chromium-deps",
+      "name": "Install Chromium Dependencies",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1050, 300]
+      "position": [
+        450,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "command": "npm",
-            "args": [
-              "install",
-              "-g",
-              "agent-browser"
-            ]
-          }
+          "cmd": "npm",
+          "args": [
+            "install",
+            "-g",
+            "agent-browser"
+          ]
         }
       },
-      "id": "Install_Node_Daemon",
-      "name": "Install Node Daemon",
+      "id": "install-node-daemon",
+      "name": "Install Node.js Daemon",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1250, 200]
+      "position": [
+        650,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "command": "sh",
-            "args": [
-              "-c",
-              "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && git clone --depth 1 --branch main https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser && cd /tmp/agent-browser/cli && cargo build --release"
-            ]
-          }
+          "cmd": "npx",
+          "args": [
+            "agent-browser",
+            "install"
+          ]
         }
       },
-      "id": "Build_Native_Daemon",
+      "id": "install-npx-agent-browser",
+      "name": "Install agent-browser CLI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "bearerToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.sandbox.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+          ]
+        }
+      },
+      "id": "install-rust-toolchain",
+      "name": "Install Rust Toolchain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        250,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "bearerToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.sandbox.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "git clone --depth 1 --branch ctate/native-2 https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser"
+          ]
+        }
+      },
+      "id": "clone-repo",
+      "name": "Clone Repository",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "bearerToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.sandbox.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "source $HOME/.cargo/env && cd /tmp/agent-browser/cli && cargo build --release"
+          ]
+        }
+      },
+      "id": "build-native-daemon",
       "name": "Build Native Daemon",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1250, 400]
+      "position": [
+        650,
+        400
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "command": "sh",
-            "args": [
-              "-c",
-              "export AGENT_BROWSER_SESSION=bench-node && agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser eval 'document.title' && agent-browser close"
-            ]
-          }
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "AGENT_BROWSER_SESSION=bench-node agent-browser open about:blank"
+          ]
         }
       },
-      "id": "Run_Node_Benchmark",
-      "name": "Run Node Benchmark",
+      "id": "run-node-benchmark",
+      "name": "Run Node.js Benchmark",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1450, 200]
+      "position": [
+        850,
+        400
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
           ]
         },
+        "sendBody": true,
+        "contentType": "application/json",
         "body": {
-          "parameters": {
-            "command": "sh",
-            "args": [
-              "-c",
-              "export AGENT_BROWSER_SESSION=bench-native && agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser eval 'document.title' && agent-browser close"
-            ]
-          }
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "AGENT_BROWSER_SESSION=bench-native agent-browser open about:blank"
+          ]
         }
       },
-      "id": "Run_Native_Benchmark",
+      "id": "run-native-benchmark",
       "name": "Run Native Benchmark",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1450, 400]
+      "position": [
+        1050,
+        400
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/stop",
+        "url": "{{ $json.sandbox.url }}/api/v1/command",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericAuthType": "bearerToken",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+              "value": "Bearer {{ $json.sandbox.token }}"
             }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": {
+          "cmd": "sh",
+          "args": [
+            "-c",
+            "agent-browser close"
           ]
         }
       },
-      "id": "Cleanup_Sandbox",
-      "name": "Cleanup Sandbox",
+      "id": "cleanup-sandbox",
+      "name": "Close Browser & Cleanup",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1650, 300]
+      "position": [
+        1250,
+        400
+      ]
     },
     {
       "parameters": {
-        "functionCode": "const nodeResult = $node.Run_Node_Benchmark.json;\nconst nativeResult = $node.Run_Native_Benchmark.json;\nconst release = $node.Parse_Release_Info.json;\n\nreturn {\n  benchmark_results: {\n    version: release.version,\n    timestamp: new Date().toISOString(),\n    node_daemon: nodeResult,\n    native_daemon: nativeResult,\n    comparison: 'completed'\n  }\n};"
+        "functionCode": "return {\n  timestamp: new Date().toISOString(),\n  benchmarkResults: $json,\n  node_version: $json.nodeVersion,\n  native_version: $json.nativeVersion,\n  summary: {\n    total_scenarios: 8,\n    timestamp: new Date().toISOString()\n  }\n};"
       },
-      "id": "Aggregate_Results",
-      "name": "Aggregate Results",
+      "id": "format-results",
+      "name": "Format Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, 300]
+      "position": [
+        1450,
+        400
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.RESULTS_WEBHOOK_URL }}",
-        "body": {
-          "parameters": "{{ $node.Aggregate_Results.json }}"
-        }
+        "url": "{{ $env.RESULTS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "application/json",
+        "body": "{{ $json }}"
       },
-      "id": "Send_Results",
-      "name": "Send Results",
+      "id": "send-results",
+      "name": "Send Results to Webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2000, 300]
+      "position": [
+        1650,
+        400
+      ]
     }
   ],
   "connections": {
-    "Schedule_Trigger": {
+    "trigger-schedule": {
       "main": [
         [
           {
-            "node": "Get_Latest_Release",
+            "node": "create-sandbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get_Latest_Release": {
+    "create-sandbox": {
       "main": [
         [
           {
-            "node": "Parse_Release_Info",
+            "node": "install-chromium-deps",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse_Release_Info": {
+    "install-chromium-deps": {
       "main": [
         [
           {
-            "node": "Create_Sandbox",
+            "node": "install-node-daemon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create_Sandbox": {
+    "install-node-daemon": {
       "main": [
         [
           {
-            "node": "Extract_Sandbox_ID",
+            "node": "install-npx-agent-browser",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract_Sandbox_ID": {
+    "install-npx-agent-browser": {
       "main": [
         [
           {
-            "node": "Install_Dependencies",
+            "node": "install-rust-toolchain",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Install_Dependencies": {
+    "install-rust-toolchain": {
       "main": [
         [
           {
-            "node": "Install_Node_Daemon",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Build_Native_Daemon",
+            "node": "clone-repo",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Install_Node_Daemon": {
+    "clone-repo": {
       "main": [
         [
           {
-            "node": "Run_Node_Benchmark",
+            "node": "build-native-daemon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build_Native_Daemon": {
+    "build-native-daemon": {
       "main": [
         [
           {
-            "node": "Run_Native_Benchmark",
+            "node": "run-node-benchmark",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Run_Node_Benchmark": {
+    "run-node-benchmark": {
       "main": [
         [
           {
-            "node": "Cleanup_Sandbox",
+            "node": "run-native-benchmark",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Run_Native_Benchmark": {
+    "run-native-benchmark": {
       "main": [
         [
           {
-            "node": "Cleanup_Sandbox",
+            "node": "cleanup-sandbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Cleanup_Sandbox": {
+    "cleanup-sandbox": {
       "main": [
         [
           {
-            "node": "Aggregate_Results",
+            "node": "format-results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Aggregate_Results": {
+    "format-results": {
       "main": [
         [
           {
-            "node": "Send_Results",
+            "node": "send-results",
             "type": "main",
             "index": 0
           }
@@ -420,7 +528,6 @@
       ]
     }
   },
-  "active": true,
   "settings": {
     "executionOrder": "v1"
   }
