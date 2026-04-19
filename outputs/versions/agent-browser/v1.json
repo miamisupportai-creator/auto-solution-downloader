@@ -1,191 +1,140 @@
 {
-  "name": "agent-browser Automation Workflow",
+  "name": "agent-browser CI/CD Automation",
   "nodes": [
     {
       "parameters": {
-        "triggerType": "manual"
+        "trigger": "on_webhook_request"
       },
-      "id": "workflow-trigger",
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [250, 300]
     },
     {
       "parameters": {
-        "functionCode": "const args = $input.all();\nconst binaryName = getBinaryName(args[0]?.platform || 'linux', args[0]?.arch || 'x64');\nreturn { binaryName, platform: args[0]?.platform || 'linux', arch: args[0]?.arch || 'x64' };\n\nfunction getBinaryName(platform, arch) {\n  const osKey = platform === 'linux' ? 'linux' : platform;\n  const ext = platform === 'win32' ? '.exe' : '';\n  return `agent-browser-${osKey}-${arch}${ext}`;\n}"
-      },
-      "id": "detect-binary",
-      "name": "Detect Binary Name",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
-        "authentication": "generic",
-        "options": {}
-      },
-      "id": "fetch-latest-release",
-      "name": "Fetch Latest Release",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [650, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const release = $input.all()[0];\nconst binaryInfo = $input.all()[1];\nconst assets = release.assets || [];\nconst binaryAsset = assets.find(a => a.name === binaryInfo.binaryName);\n\nif (!binaryAsset) {\n  throw new Error(`Binary ${binaryInfo.binaryName} not found in release`);\n}\n\nreturn {\n  downloadUrl: binaryAsset.browser_download_url,\n  binaryName: binaryInfo.binaryName,\n  size: binaryAsset.size,\n  version: release.tag_name\n};"
-      },
-      "id": "extract-download-url",
-      "name": "Extract Download URL",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [850, 300]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $node['extract-download-url'].json.downloadUrl }}",
-        "options": {},
-        "encoding": "binary"
-      },
-      "id": "download-binary",
-      "name": "Download Binary",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1050, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const binaryData = $input.all()[0];\nconst downloadInfo = $input.all()[1];\n\nreturn {\n  filename: downloadInfo.binaryName,\n  mimeType: 'application/octet-stream',\n  data: binaryData.body,\n  size: downloadInfo.size,\n  version: downloadInfo.version\n};"
-      },
-      "id": "prepare-binary-data",
-      "name": "Prepare Binary Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1250, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://registry.npmjs.org/agent-browser",
-        "authentication": "generic",
-        "options": {}
+        "url": "https://registry.npmjs.org/agent-browser"
       },
       "id": "check-npm-version",
       "name": "Check NPM Version",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [450, 450]
+      "position": [450, 300]
     },
     {
       "parameters": {
-        "functionCode": "const npmData = $input.all()[0];\nconst releaseData = $input.all()[1];\n\nconst currentVersion = npmData?.['dist-tags']?.latest || '0.0.0';\nconst newVersion = releaseData.version.replace('v', '');\n\nreturn {\n  currentVersion,\n  newVersion,\n  shouldPublish: currentVersion !== newVersion\n};"
+        "jsCode": "const npmData = $input.all()[0].json;\nconst npmVersion = npmData['dist-tags']?.latest || '0.0.0';\nconst localVersion = process.env.LOCAL_VERSION || '1.0.0';\nreturn {\n  npmVersion,\n  localVersion,\n  shouldRelease: npmVersion !== localVersion,\n  needsGithubRelease: true\n};"
       },
-      "id": "check-version-change",
-      "name": "Check Version Change",
+      "id": "compare-versions",
+      "name": "Compare Versions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 450]
+      "position": [650, 300]
     },
     {
       "parameters": {
         "conditions": {
           "conditions": [
             {
-              "value1": "={{ $node['check-version-change'].json.shouldPublish }}",
+              "value1": "{{ $node[\"compare-versions\"].json.shouldRelease }}",
               "condition": "equal",
               "value2": true
             }
           ]
         }
       },
-      "id": "should-publish-check",
-      "name": "Should Publish?",
+      "id": "should-release-check",
+      "name": "Should Release?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [850, 450]
+      "position": [850, 300]
     },
     {
       "parameters": {
-        "method": "PUT",
-        "url": "https://registry.npmjs.org/agent-browser",
-        "authentication": "generic",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ env.NPM_TOKEN }}"
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/dispatches",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "authentication": "httpHeaderAuth",
+          "genericCredentials": "{{ $secrets.GITHUB_TOKEN }}"
         },
-        "options": {}
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"event_type\": \"build-release\",\n  \"client_payload\": {\n    \"version\": \"{{ $node[\\\"compare-versions\\\"].json.localVersion }}\"\n  }\n}"
       },
-      "id": "publish-to-npm",
-      "name": "Publish to NPM",
+      "id": "trigger-build",
+      "name": "Trigger Build Pipeline",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1050, 450]
+      "position": [1050, 200]
     },
     {
       "parameters": {
         "method": "POST",
         "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases",
-        "authentication": "generic",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ env.GITHUB_TOKEN }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/vnd.github+json"
-            }
-          ]
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "authentication": "httpHeaderAuth",
+          "genericCredentials": "{{ $secrets.GITHUB_TOKEN }}"
         },
-        "options": {}
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"tag_name\": \"v{{ $node[\\\"compare-versions\\\"].json.localVersion }}\",\n  \"name\": \"v{{ $node[\\\"compare-versions\\\"].json.localVersion }}\",\n  \"draft\": false,\n  \"prerelease\": false\n}"
       },
       "id": "create-github-release",
       "name": "Create GitHub Release",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1250, 450]
+      "position": [1050, 400]
     },
     {
       "parameters": {
-        "functionCode": "const versionCheck = $input.all()[0];\nconst binaryData = $input.all()[1];\n\nreturn {\n  status: 'success',\n  message: `Published version ${versionCheck.newVersion}`,\n  binary: binaryData.filename,\n  timestamp: new Date().toISOString()\n};"
+        "method": "POST",
+        "url": "https://registry.npmjs.org/-/npm/v1/user",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "authentication": "httpHeaderAuth",
+          "genericCredentials": "{{ $secrets.NPM_TOKEN }}"
+        }
       },
-      "id": "success-summary",
-      "name": "Success Summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1450, 450]
+      "id": "publish-npm",
+      "name": "Publish to NPM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 550]
     },
     {
       "parameters": {
-        "functionCode": "const npmData = $input.all()[0];\n\nreturn {\n  status: 'skipped',\n  message: `Version unchanged (already at ${npmData?.['dist-tags']?.latest})`,\n  timestamp: new Date().toISOString()\n};"
+        "method": "POST",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/ci.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "authentication": "httpHeaderAuth",
+          "genericCredentials": "{{ $secrets.GITHUB_TOKEN }}"
+        },
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"ref\": \"main\"\n}"
       },
-      "id": "skip-summary",
-      "name": "Skip Summary",
+      "id": "trigger-ci",
+      "name": "Trigger CI Tests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  status: 'Release pipeline initiated',\n  version: $node[\"compare-versions\"].json.localVersion,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "log-completion",
+      "name": "Log Completion",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1050, 600]
+      "position": [1450, 300]
     }
   ],
   "connections": {
-    "workflow-trigger": {
+    "webhook-trigger": {
       "main": [
         [
-          {
-            "node": "detect-binary",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "check-npm-version",
             "type": "main",
@@ -194,107 +143,47 @@
         ]
       ]
     },
-    "detect-binary": {
-      "main": [
-        [
-          {
-            "node": "fetch-latest-release",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "fetch-latest-release": {
-      "main": [
-        [
-          {
-            "node": "extract-download-url",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "extract-download-url": {
-      "main": [
-        [
-          {
-            "node": "download-binary",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "check-version-change",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "download-binary": {
-      "main": [
-        [
-          {
-            "node": "prepare-binary-data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "prepare-binary-data": {
-      "main": [
-        [
-          {
-            "node": "should-publish-check",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
     "check-npm-version": {
       "main": [
         [
           {
-            "node": "check-version-change",
+            "node": "compare-versions",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-version-change": {
+    "compare-versions": {
       "main": [
         [
           {
-            "node": "should-publish-check",
+            "node": "should-release-check",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "should-publish-check": {
+    "should-release-check": {
       "main": [
         [
           {
-            "node": "publish-to-npm",
+            "node": "trigger-build",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "skip-summary",
+            "node": "log-completion",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "publish-to-npm": {
+    "trigger-build": {
       "main": [
         [
           {
@@ -309,7 +198,29 @@
       "main": [
         [
           {
-            "node": "success-summary",
+            "node": "publish-npm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "publish-npm": {
+      "main": [
+        [
+          {
+            "node": "trigger-ci",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "trigger-ci": {
+      "main": [
+        [
+          {
+            "node": "log-completion",
             "type": "main",
             "index": 0
           }
