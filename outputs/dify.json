@@ -1,322 +1,190 @@
 {
-  "name": "Dify LLM Application Platform",
+  "name": "Dify LLM Application Orchestration",
   "nodes": [
     {
-      "parameters": {
-        "triggerTopic": "dify_workflow_trigger"
-      },
-      "id": "webhook_trigger",
-      "name": "Webhook Trigger",
-      "type": "n8n-nodes-base.webhookTrigger",
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
+      "position": [250, 300],
+      "webhookId": "default"
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "url": "=http://localhost:5000/api/workflows/run",
+        "method": "POST",
+        "url": "=https://{{$env.DIFY_API_HOST}}/v1/workflows/run",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericCredentials": "=difyApiKey",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{$env.DIFY_API_KEY}}"
+              "value": "=Bearer {{$env.DIFY_API_KEY}}"
             }
           ]
         },
-        "sendBody": true,
-        "bodyParametersUi": "keyvaluepairs",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "workflow_id",
-              "value": "={{$node.webhook_trigger.json.workflow_id}}"
-            },
-            {
-              "name": "inputs",
-              "value": "={{$node.webhook_trigger.json.inputs}}"
-            }
-          ]
-        }
+        "contentType": "application/json",
+        "body": "={\"workflow_id\": \"{{$node.webhook-trigger.json.workflow_id}}\", \"inputs\": {{JSON.stringify($node.webhook-trigger.json.inputs)}}, \"user\": \"{{$node.webhook-trigger.json.user_id}}\"}"
       },
-      "id": "execute_workflow",
+      "id": "dify-workflow-executor",
       "name": "Execute Dify Workflow",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        500,
-        300
-      ]
+      "typeVersion": 4.1,
+      "position": [500, 300]
     },
     {
       "parameters": {
-        "functionCode": "const response = $input.all()[0].json;\nreturn {\n  workflow_run_id: response.workflow_run_id,\n  status: response.status,\n  outputs: response.outputs,\n  timestamp: new Date().toISOString()\n};"
+        "jsonOutput": true,
+        "content": "={\n  \"workflow_run_id\": {{$node[\"dify-workflow-executor\"].json.workflow_run_id}},\n  \"status\": {{$node[\"dify-workflow-executor\"].json.status}},\n  \"outputs\": {{$node[\"dify-workflow-executor\"].json.outputs}},\n  \"created_at\": new Date().toISOString()\n}"
       },
-      "id": "transform_response",
-      "name": "Transform Response",
+      "id": "normalize-response",
+      "name": "Normalize Workflow Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        750,
-        300
-      ]
+      "position": [750, 300]
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "url": "=http://localhost:5000/api/workflows/{{$node.execute_workflow.json.workflow_run_id}}/messages",
+        "method": "GET",
+        "url": "=https://{{$env.DIFY_API_HOST}}/v1/workflows/{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}/status",
         "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "genericCredentials": "=difyApiKey",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer {{$env.DIFY_API_KEY}}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParametersUi": "keyvaluepairs",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "message",
-              "value": "={{$node.webhook_trigger.json.message}}"
-            },
-            {
-              "name": "query",
-              "value": "={{$node.webhook_trigger.json.query}}"
+              "value": "=Bearer {{$env.DIFY_API_KEY}}"
             }
           ]
         }
       },
-      "id": "send_message",
-      "name": "Send Message to Workflow",
+      "id": "poll-workflow-status",
+      "name": "Poll Workflow Status",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1000,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "GET",
-        "url": "=http://localhost:5000/api/workflows/{{$node.execute_workflow.json.workflow_run_id}}/status",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{$env.DIFY_API_KEY}}"
-            }
-          ]
-        }
-      },
-      "id": "check_workflow_status",
-      "name": "Check Workflow Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const status = $input.all()[0].json.status;\nconst isComplete = status === 'completed' || status === 'failed';\nreturn {\n  is_complete: isComplete,\n  status: status,\n  should_retry: status === 'running'\n};"
-      },
-      "id": "evaluate_status",
-      "name": "Evaluate Status",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1500,
-        300
-      ]
+      "typeVersion": 4.1,
+      "position": [1000, 300]
     },
     {
       "parameters": {
         "conditions": {
-          "nodeOutputs": [
+          "string": [
             {
-              "condition": "===",
-              "value1": "={{$node.evaluate_status.json.should_retry}}",
-              "value2": true
+              "value1": "={{$node[\"poll-workflow-status\"].json.status}}",
+              "value2": "completed",
+              "operation": "equals"
             }
           ]
         }
       },
-      "id": "retry_check",
-      "name": "Retry Decision",
+      "id": "check-completion",
+      "name": "Check Workflow Completion",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        1750,
-        300
-      ]
+      "typeVersion": 2,
+      "position": [1250, 300]
     },
     {
       "parameters": {
-        "waitTillDate": "={{new Date(Date.now() + 3000).toISOString()}}"
+        "method": "POST",
+        "url": "={{$env.WEBHOOK_CALLBACK_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "contentType": "application/json",
+        "body": "={\"workflow_id\": \"{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}\", \"status\": \"{{$node[\"poll-workflow-status\"].json.status}}\", \"result\": {{JSON.stringify($node[\"poll-workflow-status\"].json.outputs)}}}"
       },
-      "id": "wait_before_retry",
-      "name": "Wait 3 Seconds",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        2000,
-        150
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "url": "={{$env.WEBHOOK_URL}}",
-        "authentication": "none",
-        "sendBody": true,
-        "bodyParametersUi": "json",
-        "bodyParameters": {
-          "json": {
-            "workflow_run_id": "={{$node.execute_workflow.json.workflow_run_id}}",
-            "status": "={{$node.check_workflow_status.json.status}}",
-            "outputs": "={{$node.check_workflow_status.json.outputs}}",
-            "timestamp": "={{$node.transform_response.json.timestamp}}"
-          }
-        }
-      },
-      "id": "webhook_response",
-      "name": "Send Webhook Response",
+      "id": "send-completion-callback",
+      "name": "Send Completion Callback",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2000,
-        450
-      ]
+      "typeVersion": 4.1,
+      "position": [1500, 200]
     },
     {
       "parameters": {
-        "functionCode": "return {\n  success: true,\n  message: 'Dify workflow execution completed',\n  workflow_run_id: $input.all()[0].json.workflow_run_id,\n  status: $input.all()[0].json.status\n};"
+        "errorMessage": "Workflow execution failed or timed out"
       },
-      "id": "final_output",
-      "name": "Final Output",
+      "id": "handle-error",
+      "name": "Handle Execution Error",
+      "type": "n8n-nodes-base.error",
+      "typeVersion": 1,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "content": "={\n  \"error\": \"Workflow execution incomplete\",\n  \"workflow_id\": \"{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}\",\n  \"last_status\": \"{{$node[\"poll-workflow-status\"].json.status}}\",\n  \"timestamp\": new Date().toISOString()\n}"
+      },
+      "id": "log-incomplete-execution",
+      "name": "Log Incomplete Execution",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2250,
-        300
-      ]
+      "position": [1500, 400]
     }
   ],
   "connections": {
-    "webhook_trigger": {
+    "webhook-trigger": {
       "main": [
         [
           {
-            "node": "execute_workflow",
+            "node": "dify-workflow-executor",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "execute_workflow": {
+    "dify-workflow-executor": {
       "main": [
         [
           {
-            "node": "transform_response",
+            "node": "normalize-response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "transform_response": {
+    "normalize-response": {
       "main": [
         [
           {
-            "node": "send_message",
+            "node": "poll-workflow-status",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "send_message": {
+    "poll-workflow-status": {
       "main": [
         [
           {
-            "node": "check_workflow_status",
+            "node": "check-completion",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check_workflow_status": {
+    "check-completion": {
       "main": [
         [
           {
-            "node": "evaluate_status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "evaluate_status": {
-      "main": [
-        [
-          {
-            "node": "retry_check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "retry_check": {
-      "main": [
-        [
-          {
-            "node": "wait_before_retry",
+            "node": "send-completion-callback",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "webhook_response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "wait_before_retry": {
-      "main": [
-        [
-          {
-            "node": "check_workflow_status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "webhook_response": {
-      "main": [
-        [
-          {
-            "node": "final_output",
+            "node": "log-incomplete-execution",
             "type": "main",
             "index": 0
           }
@@ -326,5 +194,7 @@
   },
   "settings": {
     "executionOrder": "v1"
-  }
+  },
+  "staticData": null,
+  "pinData": null
 }
