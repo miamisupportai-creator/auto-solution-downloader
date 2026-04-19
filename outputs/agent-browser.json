@@ -1,222 +1,306 @@
 {
-  "name": "agent-browser Benchmark & Evaluation Workflow",
+  "name": "agent-browser CI/CD Automation",
   "nodes": [
     {
       "parameters": {
-        "triggerType": "manual"
+        "triggerTimes": [
+          {
+            "mode": "everyDay",
+            "hour": 0,
+            "minute": 0
+          }
+        ]
       },
-      "id": "trigger",
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
+      "id": "Schedule_Trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [50, 300]
+      "position": [
+        50,
+        250
+      ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth"
+        "httpMethod": "GET",
+        "url": "https://registry.npmjs.org/agent-browser",
+        "options": {}
       },
-      "id": "fetch_latest_release",
-      "name": "Fetch Latest Release",
+      "id": "Check_NPM_Version",
+      "name": "Check NPM Version",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        250
+      ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://registry.npmjs.org/agent-browser"
+        "code": "const npmData = $input.all()[0].json.json;\nconst npmVersion = npmData['dist-tags'].latest;\nconst localVersion = $env.PKG_VERSION || '0.0.0';\nreturn {\n  npmVersion,\n  localVersion,\n  shouldRelease: npmVersion !== localVersion,\n  needsGithubRelease: true\n};"
       },
-      "id": "fetch_npm_package",
-      "name": "Fetch NPM Package Info",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const latestTag = $input.first().json.tag_name;\nconst npmVersion = $input.all()[1].json['dist-tags'].latest;\nconst needsRelease = latestTag.replace('v', '') !== npmVersion;\nreturn { needsRelease, latestTag, npmVersion, version: npmVersion };"
-      },
-      "id": "check_version_sync",
-      "name": "Check Version Sync",
+      "id": "Compare_Versions",
+      "name": "Compare Versions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        450,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "value1": "{{ $json.shouldRelease }}",
+              "operator": "equals",
+              "value2": true
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "Should_Release_Decision",
+      "name": "Should Release Decision",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        650,
+        250
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.vercel.com/v1/edge-config/create",
-        "authentication": "generic",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/release.yml/dispatches",
+        "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
         "sendBody": true,
-        "body": "{\n  \"configurationId\": \"benchmark_run_${new Date().toISOString()}\",\n  \"timestamp\": \"${new Date().toISOString()}\"\n}"
+        "bodyParametersUi": "json",
+        "body": "{\n  \"ref\": \"main\"\n}",
+        "options": {}
       },
-      "id": "start_benchmark",
-      "name": "Initialize Benchmark Run",
+      "id": "Trigger_Release_Workflow",
+      "name": "Trigger Release Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [850, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const scenarios = [\n  { name: 'navigate', description: 'Page navigation' },\n  { name: 'snapshot', description: 'DOM snapshot' },\n  { name: 'screenshot', description: 'Screenshot capture' },\n  { name: 'evaluate', description: 'JavaScript execution' },\n  { name: 'click', description: 'Element interaction' },\n  { name: 'fill', description: 'Form input' },\n  { name: 'agent-loop', description: 'Snapshot-click-snapshot cycle' },\n  { name: 'full-workflow', description: 'Realistic 7-command sequence' }\n];\nreturn { scenarios, totalScenarios: scenarios.length };"
-      },
-      "id": "enumerate_scenarios",
-      "name": "Enumerate Benchmark Scenarios",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1050, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const evalCases = [\n  { id: 'skill-loading-01', category: 'skill-loading', description: 'Load skill before command' },\n  { id: 'skill-selection-01', category: 'skill-selection', description: 'Select correct skill' },\n  { id: 'command-usage-01', category: 'command-usage', description: 'Generate correct commands' }\n];\nreturn { evalCases, totalCases: evalCases.length };"
-      },
-      "id": "enumerate_evals",
-      "name": "Enumerate Eval Cases",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1050, 450]
+      "position": [
+        850,
+        100
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.vercel.com/v1/sandbox",
-        "authentication": "generic",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/ci.yml/dispatches",
+        "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
         "sendBody": true,
-        "body": "{\n  \"runtime\": \"node22\",\n  \"networkPolicy\": \"allow-all\",\n  \"resources\": { \"vcpus\": 8 },\n  \"timeout\": 1800000\n}"
+        "bodyParametersUi": "json",
+        "body": "{\n  \"ref\": \"main\"\n}",
+        "options": {}
       },
-      "id": "create_sandbox",
-      "name": "Create Vercel Sandbox",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1250, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.vercel.com/v1/sandbox/{{$node[\"create_sandbox\"].json.sandboxId}}/run",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "body": "{\n  \"command\": \"agent-browser\",\n  \"args\": [\"--version\"]\n}"
-      },
-      "id": "install_daemon",
-      "name": "Install Agent-Browser Daemon",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1450, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "const results = [];\nconst scenarios = $node['enumerate_scenarios'].json.scenarios;\n\nfor (const scenario of scenarios) {\n  const iterations = 10;\n  const warmup = 1;\n  const samples = [];\n  \n  for (let i = 0; i < iterations; i++) {\n    samples.push(Math.floor(Math.random() * 5000) + 100);\n  }\n  \n  const sorted = samples.sort((a, b) => a - b);\n  const avg = sorted.reduce((a, b) => a + b, 0) / sorted.length;\n  const variance = sorted.reduce((acc, v) => acc + (v - avg) ** 2, 0) / sorted.length;\n  const stddev = Math.sqrt(variance);\n  \n  results.push({\n    name: scenario.name,\n    description: scenario.description,\n    avgMs: Math.round(avg),\n    stddevMs: Math.round(stddev),\n    minMs: Math.min(...sorted),\n    maxMs: Math.max(...sorted),\n    p50Ms: sorted[Math.floor(sorted.length / 2)],\n    samples: sorted\n  });\n}\n\nreturn { benchmarkResults: results, timestamp: new Date().toISOString() };"
-      },
-      "id": "collect_benchmark_metrics",
-      "name": "Collect Benchmark Metrics",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1650, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.vercel.com/v1/ai-gateway/evaluate",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "body": "{\n  \"cases\": {{$node[\"enumerate_evals\"].json.evalCases}},\n  \"provider\": \"claude\",\n  \"model\": \"anthropic/claude-sonnet-4.6\",\n  \"judge\": false\n}"
-      },
-      "id": "run_eval_cases",
-      "name": "Run Eval Cases",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1650, 450]
-    },
-    {
-      "parameters": {
-        "functionCode": "const benchmarks = $node['collect_benchmark_metrics'].json.benchmarkResults;\nconst evals = $node['run_eval_cases'].json.results || [];\n\nconst summary = {\n  benchmarkDate: new Date().toISOString(),\n  totalScenarios: benchmarks.length,\n  scenarios: benchmarks.map(b => ({ name: b.name, avgMs: b.avgMs, stddevMs: b.stddevMs })),\n  totalEvalCases: evals.length,\n  evalsPassed: evals.filter(e => e.passed).length,\n  evalsFailed: evals.filter(e => !e.passed).length,\n  evalErrors: evals.filter(e => e.error).length\n};\n\nreturn summary;"
-      },
-      "id": "summarize_results",
-      "name": "Summarize Results",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1850, 375]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/dispatches",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "body": "{\n  \"event_type\": \"benchmark-complete\",\n  \"client_payload\": {{$node[\"summarize_results\"].json}}\n}"
-      },
-      "id": "trigger_ci",
+      "id": "Trigger_CI_Workflow",
       "name": "Trigger CI Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2050, 300]
+      "position": [
+        850,
+        250
+      ]
     },
     {
       "parameters": {
-        "method": "DELETE",
-        "url": "=https://api.vercel.com/v1/sandbox/{{$node[\"create_sandbox\"].json.sandboxId}}"
+        "code": "return {\n  status: 'Release workflow triggered',\n  timestamp: new Date().toISOString()\n};"
       },
-      "id": "cleanup_sandbox",
-      "name": "Cleanup Sandbox",
+      "id": "Release_Success",
+      "name": "Release Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "code": "return {\n  status: 'No release needed',\n  reason: 'Version unchanged on npm',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "No_Release_Needed",
+      "name": "No Release Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/tags/v{{ $json.localVersion }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "Check_GitHub_Release",
+      "name": "Check GitHub Release",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2050, 450]
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "code": "const releaseExists = $input.all().some(node => node.json?.id);\nreturn {\n  releaseExists\n};"
+      },
+      "id": "Parse_Release_Check",
+      "name": "Parse Release Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        400
+      ]
     }
   ],
   "connections": {
-    "trigger": {
-      "main": [[{ "node": "fetch_latest_release", "type": "main", "index": 0 }]]
+    "Schedule_Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check_NPM_Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "fetch_latest_release": {
-      "main": [[{ "node": "fetch_npm_package", "type": "main", "index": 0 }]]
+    "Check_NPM_Version": {
+      "main": [
+        [
+          {
+            "node": "Compare_Versions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "fetch_npm_package": {
-      "main": [[{ "node": "check_version_sync", "type": "main", "index": 0 }]]
+    "Compare_Versions": {
+      "main": [
+        [
+          {
+            "node": "Should_Release_Decision",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check_GitHub_Release",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "check_version_sync": {
-      "main": [[{ "node": "enumerate_scenarios", "type": "main", "index": 0 }, { "node": "enumerate_evals", "type": "main", "index": 0 }]]
+    "Should_Release_Decision": {
+      "main": [
+        [
+          {
+            "node": "Trigger_Release_Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No_Release_Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "enumerate_scenarios": {
-      "main": [[{ "node": "start_benchmark", "type": "main", "index": 0 }]]
+    "Trigger_Release_Workflow": {
+      "main": [
+        [
+          {
+            "node": "Release_Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "enumerate_evals": {
-      "main": [[{ "node": "create_sandbox", "type": "main", "index": 0 }]]
+    "Check_GitHub_Release": {
+      "main": [
+        [
+          {
+            "node": "Parse_Release_Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "start_benchmark": {
-      "main": [[{ "node": "create_sandbox", "type": "main", "index": 0 }]]
-    },
-    "create_sandbox": {
-      "main": [[{ "node": "install_daemon", "type": "main", "index": 0 }]]
-    },
-    "install_daemon": {
-      "main": [[{ "node": "collect_benchmark_metrics", "type": "main", "index": 0 }]]
-    },
-    "collect_benchmark_metrics": {
-      "main": [[{ "node": "run_eval_cases", "type": "main", "index": 0 }]]
-    },
-    "run_eval_cases": {
-      "main": [[{ "node": "summarize_results", "type": "main", "index": 0 }]]
-    },
-    "summarize_results": {
-      "main": [[{ "node": "trigger_ci", "type": "main", "index": 0 }, { "node": "cleanup_sandbox", "type": "main", "index": 0 }]]
-    },
-    "trigger_ci": {
-      "main": [[{ "node": "cleanup_sandbox", "type": "main", "index": 0 }]]
+    "Parse_Release_Check": {
+      "main": [
+        [
+          {
+            "node": "Trigger_CI_Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner"
-  }
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {}
 }

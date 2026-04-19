@@ -1,190 +1,310 @@
 {
-  "name": "Dify LLM Application Orchestration",
+  "name": "Dify LLM Application Platform",
   "nodes": [
     {
-      "parameters": {},
-      "id": "webhook-trigger",
+      "parameters": {
+        "triggerTopic": "dify.workflow"
+      },
+      "id": "webhook_trigger",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [250, 300],
-      "webhookId": "default"
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "=https://{{$env.DIFY_API_HOST}}/v1/workflows/run",
+        "url": "=https://api.dify.ai/v1/workflows/{{ $json.workflow_id }}/execute",
         "authentication": "genericCredentialType",
-        "genericCredentials": "=difyApiKey",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.DIFY_API_KEY}}"
-            }
-          ]
+        "genericCredentials": "=dify_api_key",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": "={{ $json.inputs }}"
         },
-        "contentType": "application/json",
-        "body": "={\"workflow_id\": \"{{$node.webhook-trigger.json.workflow_id}}\", \"inputs\": {{JSON.stringify($node.webhook-trigger.json.inputs)}}, \"user\": \"{{$node.webhook-trigger.json.user_id}}\"}"
+        "options": {}
       },
-      "id": "dify-workflow-executor",
+      "id": "execute_workflow",
       "name": "Execute Dify Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsonOutput": true,
-        "content": "={\n  \"workflow_run_id\": {{$node[\"dify-workflow-executor\"].json.workflow_run_id}},\n  \"status\": {{$node[\"dify-workflow-executor\"].json.status}},\n  \"outputs\": {{$node[\"dify-workflow-executor\"].json.outputs}},\n  \"created_at\": new Date().toISOString()\n}"
-      },
-      "id": "normalize-response",
-      "name": "Normalize Workflow Response",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [750, 300]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "=https://{{$env.DIFY_API_HOST}}/v1/workflows/{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}/status",
+        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/completion-messages",
         "authentication": "genericCredentialType",
-        "genericCredentials": "=difyApiKey",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{$env.DIFY_API_KEY}}"
-            }
-          ]
-        }
+        "genericCredentials": "=dify_api_key",
+        "method": "POST",
+        "bodyParameters": {
+          "inputs": "={{ $json.message_inputs }}",
+          "query": "={{ $json.query }}",
+          "response_mode": "blocking"
+        },
+        "options": {}
       },
-      "id": "poll-workflow-status",
-      "name": "Poll Workflow Status",
+      "id": "invoke_llm_app",
+      "name": "Invoke LLM App",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1000, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
+        "url": "=https://api.dify.ai/v1/datasets/{{ $json.dataset_id }}/documents",
+        "authentication": "genericCredentialType",
+        "genericCredentials": "=dify_api_key",
+        "method": "POST",
+        "bodyParameters": {
+          "name": "={{ $json.document_name }}",
+          "text": "={{ $json.document_content }}"
+        },
+        "options": {}
+      },
+      "id": "upload_knowledge_base",
+      "name": "Upload to Knowledge Base",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        750,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/logs",
+        "authentication": "genericCredentialType",
+        "genericCredentials": "=dify_api_key",
+        "method": "GET",
+        "qs": {
+          "limit": "={{ $json.log_limit || 100 }}",
+          "offset": "={{ $json.log_offset || 0 }}"
+        },
+        "options": {}
+      },
+      "id": "fetch_app_logs",
+      "name": "Fetch App Logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/advanced_logs",
+        "authentication": "genericCredentialType",
+        "genericCredentials": "=dify_api_key",
+        "method": "GET",
+        "qs": {
+          "limit": "={{ $json.analytics_limit || 50 }}"
+        },
+        "options": {}
+      },
+      "id": "fetch_analytics",
+      "name": "Fetch Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
             {
-              "value1": "={{$node[\"poll-workflow-status\"].json.status}}",
-              "value2": "completed",
-              "operation": "equals"
+              "id": "workflow_status",
+              "value": "=completed",
+              "type": "string"
+            },
+            {
+              "id": "execution_time",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "result_summary",
+              "value": "=Workflow executed successfully",
+              "type": "string"
             }
           ]
         }
       },
-      "id": "check-completion",
-      "name": "Check Workflow Completion",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [1250, 300]
+      "id": "transform_results",
+      "name": "Transform Results",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        1250,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{$env.WEBHOOK_CALLBACK_URL}}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "contentType": "application/json",
-        "body": "={\"workflow_id\": \"{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}\", \"status\": \"{{$node[\"poll-workflow-status\"].json.status}}\", \"result\": {{JSON.stringify($node[\"poll-workflow-status\"].json.outputs)}}}"
+        "url": "={{ $json.webhook_url }}",
+        "body": "={{ $json }}",
+        "options": {}
       },
-      "id": "send-completion-callback",
-      "name": "Send Completion Callback",
+      "id": "webhook_callback",
+      "name": "Send Webhook Callback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1500, 200]
+      "position": [
+        1500,
+        300
+      ]
     },
     {
       "parameters": {
-        "errorMessage": "Workflow execution failed or timed out"
+        "errorMessage": "=Workflow execution failed",
+        "triggerType": "errorMessage"
       },
-      "id": "handle-error",
-      "name": "Handle Execution Error",
-      "type": "n8n-nodes-base.error",
+      "id": "error_handler",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [1500, 400]
+      "position": [
+        500,
+        600
+      ]
     },
     {
       "parameters": {
-        "content": "={\n  \"error\": \"Workflow execution incomplete\",\n  \"workflow_id\": \"{{$node[\"dify-workflow-executor\"].json.workflow_run_id}}\",\n  \"last_status\": \"{{$node[\"poll-workflow-status\"].json.status}}\",\n  \"timestamp\": new Date().toISOString()\n}"
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error_status",
+              "value": "=error",
+              "type": "string"
+            },
+            {
+              "id": "error_details",
+              "value": "={{ $json.error.message }}",
+              "type": "string"
+            }
+          ]
+        }
       },
-      "id": "log-incomplete-execution",
-      "name": "Log Incomplete Execution",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1500, 400]
+      "id": "format_error",
+      "name": "Format Error Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        750,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.error_webhook_url }}",
+        "body": "={{ $json }}",
+        "options": {}
+      },
+      "id": "error_webhook",
+      "name": "Send Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        600
+      ]
     }
   ],
   "connections": {
-    "webhook-trigger": {
+    "webhook_trigger": {
       "main": [
         [
           {
-            "node": "dify-workflow-executor",
+            "node": "execute_workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "dify-workflow-executor": {
+    "execute_workflow": {
       "main": [
         [
           {
-            "node": "normalize-response",
+            "node": "invoke_llm_app",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "normalize-response": {
+    "invoke_llm_app": {
       "main": [
         [
           {
-            "node": "poll-workflow-status",
+            "node": "fetch_app_logs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "poll-workflow-status": {
+    "fetch_app_logs": {
       "main": [
         [
           {
-            "node": "check-completion",
+            "node": "fetch_analytics",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-completion": {
+    "fetch_analytics": {
       "main": [
         [
           {
-            "node": "send-completion-callback",
+            "node": "transform_results",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "transform_results": {
+      "main": [
         [
           {
-            "node": "log-incomplete-execution",
+            "node": "webhook_callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "error_handler": {
+      "main": [
+        [
+          {
+            "node": "format_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format_error": {
+      "main": [
+        [
+          {
+            "node": "error_webhook",
             "type": "main",
             "index": 0
           }
@@ -196,5 +316,7 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "pinData": null
+  "tags": [],
+  "triggerCount": 0,
+  "pinData": {}
 }
