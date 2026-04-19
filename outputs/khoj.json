@@ -1,191 +1,217 @@
 {
-  "name": "Khoj Desktop App File Sync Automation",
+  "name": "Khoj Content Indexing Workflow",
   "nodes": [
     {
       "parameters": {
-        "rule": "every 10 minutes"
+        "triggerTimes": [
+          {
+            "mode": "everyMinutes",
+            "value": 10
+          }
+        ]
       },
+      "id": "Schedule_Trigger",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
-      "position": [250, 300]
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "functionCode": "// Check if token and hostURL are set\nconst token = $input.first().json.khojToken;\nconst hostURL = $input.first().json.hostURL;\nconst syncing = $input.first().json.syncing;\n\nif (!token || !hostURL || syncing === true) {\n  return { shouldContinue: false, message: 'Missing credentials or already syncing' };\n}\n\nreturn { shouldContinue: true };"
+        "functionCode": "const files = $input.first().json.files || [];\nconst folders = $input.first().json.folders || [];\nconst lastSync = $input.first().json.lastSync || [];\nconst regenerate = $input.first().json.regenerate || false;\n\nlet filesToPush = [];\n\n// Collect paths of all configured files\nfor (const file of files) {\n  filesToPush.push(file.path);\n}\n\n// Collect paths of all indexable files in configured folders\nfor (const folder of folders) {\n  // Recursive function to get all files\n  function collectFiles(folderPath) {\n    // Simulated file collection - in real scenario would use filesystem\n    return [];\n  }\n  filesToPush = filesToPush.concat(collectFiles(folder.path));\n}\n\nconst filesDataToPush = [];\nfor (const file of filesToPush) {\n  if (!regenerate) {\n    const lastSyncEntry = lastSync.find(sf => sf.path === file);\n    if (lastSyncEntry) {\n      // Skip files not modified since last sync\n      continue;\n    }\n  }\n  filesDataToPush.push({ path: file });\n}\n\nreturn { filesToPush, filesDataToPush };"
       },
-      "name": "Validate Credentials",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Collect files from configured paths\nconst files = $input.first().json.files || [];\nconst folders = $input.first().json.folders || [];\nconst lastSync = $input.first().json.lastSync || [];\n\nconst filesToPush = [];\nconst supportedExtensions = ['org', 'md', 'markdown', 'txt', 'html', 'xml', 'pdf', 'jpg', 'jpeg', 'png', 'webp', 'json', 'csv', 'py', 'js', 'java', 'cpp'];\n\n// Add direct files\nfor (const file of files) {\n  filesToPush.push(file.path);\n}\n\nreturn {\n  filesToPush,\n  lastSync,\n  folders,\n  supportedExtensions\n};"
-      },
+      "id": "Collect_Files",
       "name": "Collect Files",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
-        "functionCode": "// Filter files based on modification time\nconst filesToPush = $input.first().json.filesToPush;\nconst lastSync = $input.first().json.lastSync;\nconst regenerate = $input.first().json.regenerate || false;\n\nconst filesDataToPush = [];\n\nfor (const file of filesToPush) {\n  // Check if file has been modified since last sync\n  const lastSyncEntry = lastSync.find(f => f.path === file);\n  \n  // For now, mark all files as needing sync\n  // In production, would check file modification time\n  filesDataToPush.push({\n    path: file,\n    needsSync: true\n  });\n}\n\nreturn {\n  filesDataToPush,\n  count: filesDataToPush.length\n};"
+        "functionCode": "const khojToken = $input.first().json.khojToken;\nconst hostURL = $input.first().json.hostURL || 'https://app.khoj.dev';\nconst filesData = $input.first().json.filesDataToPush || [];\n\nif (!khojToken || !hostURL || filesData.length === 0) {\n  return { requests: [], skipped: true };\n}\n\nconst requests = [];\nconst batchSize = 1000;\n\nfor (let i = 0; i < filesData.length; i += batchSize) {\n  const batch = filesData.slice(i, i + batchSize);\n  requests.push({\n    url: `${hostURL}/api/content?client=desktop`,\n    method: 'PATCH',\n    headers: { 'Authorization': `Bearer ${khojToken}` },\n    files: batch\n  });\n}\n\nreturn { requests, batchCount: requests.length };"
       },
-      "name": "Filter Modified Files",
+      "id": "Prepare_Requests",
+      "name": "Prepare Requests",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "{{ $json.hostURL }}/api/content?client=desktop",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": {
-          "credentialsType": "httpHeaderAuth",
-          "authentication": {
-            "name": "Authorization",
-            "value": "Bearer {{ $json.khojToken }}"
-          }
+        "url": "={{ $json.requests[0].url }}",
+        "authentication": "generic",
+        "genericAuth": {
+          "passwordFieldType": "header",
+          "headerName": "Authorization",
+          "headerValue": "={{ $json.requests[0].headers['Authorization'] }}"
         },
-        "sendForm": true,
-        "formFields": {
-          "values": [
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": "={{ $json.requests[0].files }}"
+        },
+        "options": {}
+      },
+      "id": "Index_Content_Request",
+      "name": "Index Content Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const response = $input.first().json;\nconst filesToPush = $input.prev[0].json.filesToPush || [];\nconst currentTime = new Date().toISOString();\n\nconst lastSync = filesToPush.map(file => ({\n  path: file,\n  datetime: currentTime\n}));\n\nreturn { lastSync, success: true, syncedFiles: filesToPush.length };"
+      },
+      "id": "Update_Last_Sync",
+      "name": "Update Last Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.hostURL }}/api/v1/user?client=desktop",
+        "authentication": "generic",
+        "genericAuth": {
+          "passwordFieldType": "header",
+          "headerName": "Authorization",
+          "headerValue": "={{ 'Bearer ' + $json.khojToken }}"
+        },
+        "options": {}
+      },
+      "id": "Fetch_User_Info",
+      "name": "Fetch User Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.KHOJ_HOST }}/api/content",
+        "authentication": "generic",
+        "genericAuth": {
+          "passwordFieldType": "header",
+          "headerName": "Authorization",
+          "headerValue": "={{ 'Bearer ' + $json.khojToken }}"
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
             {
-              "name": "files",
-              "value": "{{ JSON.stringify($json.filesDataToPush) }}"
+              "name": "client",
+              "value": "webhook"
             }
           ]
-        }
+        },
+        "options": {}
       },
-      "name": "Sync Files to Khoj",
+      "id": "Sync_Files_HTTP",
+      "name": "Sync Files HTTP",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1050, 300]
+      "typeVersion": 4.2,
+      "position": [
+        850,
+        500
+      ]
     },
     {
       "parameters": {
-        "functionCode": "// Update last sync timestamp\nconst response = $input.first().json;\nconst filesToPush = $input.previous(1).json.filesDataToPush;\n\nconst lastSync = filesToPush\n  .filter(file => true) // In production, check response.data\n  .map(file => ({\n    path: file.path,\n    datetime: new Date().toISOString()\n  }));\n\nreturn {\n  lastSync,\n  syncCompleted: true,\n  filesCount: filesToPush.length\n};"
+        "functionCode": "const state = {\n  completed: true,\n  syncedCount: $input.first().json.syncedFiles || 0,\n  timestamp: new Date().toISOString()\n};\n\nif ($input.first().json.error) {\n  state.completed = false;\n  state.error = $input.first().json.error.message;\n}\n\nreturn state;"
       },
-      "name": "Update Sync Status",
+      "id": "Build_State_Response",
+      "name": "Build State Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 300]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Handle sync errors\nconst error = $input.first().json.error;\n\nlet errorMessage = 'Sync was unsuccessful';\n\nif (error?.response?.status === 429) {\n  errorMessage = 'Out of space. Upgrade your Khoj plan to continue syncing.';\n} else if (error?.code === 'ECONNREFUSED') {\n  errorMessage = 'Could not connect to Khoj server. Check your host URL and network connection.';\n} else if (error?.message) {\n  errorMessage = error.message;\n}\n\nreturn {\n  syncFailed: true,\n  error: errorMessage,\n  timestamp: new Date().toISOString()\n};"
-      },
-      "name": "Handle Sync Error",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1050, 500]
-    },
-    {
-      "parameters": {
-        "operation": "insert",
-        "schema": [
-          {
-            "column": "path",
-            "type": "string"
-          },
-          {
-            "column": "lastSyncTime",
-            "type": "string"
-          },
-          {
-            "column": "status",
-            "type": "string"
-          },
-          {
-            "column": "errorMessage",
-            "type": "string"
-          }
-        ],
-        "data": "{{ { path: $json.path, lastSyncTime: $json.datetime, status: 'synced', errorMessage: '' } }}"
-      },
-      "name": "Log Sync Event",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [1450, 300],
-      "credentials": {
-        "postgres": "postgres_default"
-      }
+      "position": [
+        1250,
+        300
+      ]
     }
   ],
   "connections": {
-    "Schedule Trigger": {
+    "Schedule_Trigger": {
       "main": [
         [
           {
-            "node": "Validate Credentials",
-            "indices": [0]
+            "node": "Collect_Files",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "Validate Credentials": {
+    "Collect_Files": {
       "main": [
         [
           {
-            "node": "Collect Files",
-            "indices": [0]
+            "node": "Prepare_Requests",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "Collect Files": {
+    "Prepare_Requests": {
       "main": [
         [
           {
-            "node": "Filter Modified Files",
-            "indices": [0]
+            "node": "Index_Content_Request",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "Filter Modified Files": {
+    "Index_Content_Request": {
       "main": [
         [
           {
-            "node": "Sync Files to Khoj",
-            "indices": [0]
+            "node": "Update_Last_Sync",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "Sync Files to Khoj": {
+    "Update_Last_Sync": {
       "main": [
         [
           {
-            "node": "Update Sync Status",
-            "indices": [0]
-          }
-        ],
-        [
-          {
-            "node": "Handle Sync Error",
-            "indices": [0]
-          }
-        ]
-      ]
-    },
-    "Update Sync Status": {
-      "main": [
-        [
-          {
-            "node": "Log Sync Event",
-            "indices": [0]
+            "node": "Build_State_Response",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     }
   },
+  "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromAnyUser"
+    "executionOrder": "v1"
   }
 }

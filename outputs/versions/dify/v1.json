@@ -1,11 +1,9 @@
 {
-  "name": "Dify LLM Application Platform",
+  "name": "Dify Platform Integration",
   "nodes": [
     {
-      "parameters": {
-        "triggerTopic": "dify.workflow"
-      },
-      "id": "webhook_trigger",
+      "parameters": {},
+      "id": "webhook-trigger",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
@@ -16,295 +14,335 @@
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/v1/workflows/{{ $json.workflow_id }}/execute",
-        "authentication": "genericCredentialType",
-        "genericCredentials": "=dify_api_key",
         "method": "POST",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/workflows",
+        "authentication": "bearerToken",
+        "sendBody": true,
         "bodyParameters": {
-          "parameters": "={{ $json.inputs }}"
+          "parameters": [
+            {
+              "name": "workflow_id",
+              "value": "={{ $node.webhook-trigger.json.workflow_id }}"
+            },
+            {
+              "name": "inputs",
+              "value": "={{ $node.webhook-trigger.json.inputs }}"
+            }
+          ]
         },
-        "options": {}
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        }
       },
-      "id": "execute_workflow",
-      "name": "Execute Dify Workflow",
+      "id": "http-request-workflow",
+      "name": "HTTP Request - Execute Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        500,
+        450,
         300
       ]
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/completion-messages",
-        "authentication": "genericCredentialType",
-        "genericCredentials": "=dify_api_key",
-        "method": "POST",
-        "bodyParameters": {
-          "inputs": "={{ $json.message_inputs }}",
-          "query": "={{ $json.query }}",
-          "response_mode": "blocking"
-        },
-        "options": {}
+        "method": "GET",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/workflows/{{ $node.webhook-trigger.json.workflow_id }}/runs/{{ $node['http-request-workflow'].json.run_id }}",
+        "authentication": "bearerToken"
       },
-      "id": "invoke_llm_app",
-      "name": "Invoke LLM App",
+      "id": "http-request-get-status",
+      "name": "HTTP Request - Get Workflow Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        750,
+        650,
         300
       ]
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/v1/datasets/{{ $json.dataset_id }}/documents",
-        "authentication": "genericCredentialType",
-        "genericCredentials": "=dify_api_key",
-        "method": "POST",
-        "bodyParameters": {
-          "name": "={{ $json.document_name }}",
-          "text": "={{ $json.document_content }}"
-        },
-        "options": {}
+        "operation": "set",
+        "nodeToExecuteOnMissing": "Set workflow response"
       },
-      "id": "upload_knowledge_base",
-      "name": "Upload to Knowledge Base",
+      "id": "set-response-data",
+      "name": "Set Response Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/datasets",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $node.webhook-trigger.json.dataset_name }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $node.webhook-trigger.json.description }}"
+            }
+          ]
+        }
+      },
+      "id": "http-request-create-dataset",
+      "name": "HTTP Request - Create Dataset",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        750,
+        450,
         450
       ]
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/logs",
-        "authentication": "genericCredentialType",
-        "genericCredentials": "=dify_api_key",
-        "method": "GET",
-        "qs": {
-          "limit": "={{ $json.log_limit || 100 }}",
-          "offset": "={{ $json.log_offset || 0 }}"
-        },
-        "options": {}
+        "method": "POST",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/datasets/{{ $node['http-request-create-dataset'].json.id }}/documents",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "value": "={{ $node.webhook-trigger.json.file_content }}"
+            }
+          ]
+        }
       },
-      "id": "fetch_app_logs",
-      "name": "Fetch App Logs",
+      "id": "http-request-upload-document",
+      "name": "HTTP Request - Upload Document",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1000,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/v1/apps/{{ $json.app_id }}/advanced_logs",
-        "authentication": "genericCredentialType",
-        "genericCredentials": "=dify_api_key",
-        "method": "GET",
-        "qs": {
-          "limit": "={{ $json.analytics_limit || 50 }}"
-        },
-        "options": {}
-      },
-      "id": "fetch_analytics",
-      "name": "Fetch Analytics",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1000,
+        650,
         450
       ]
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "workflow_status",
-              "value": "=completed",
-              "type": "string"
-            },
-            {
-              "id": "execution_time",
-              "value": "={{ new Date().toISOString() }}",
-              "type": "string"
-            },
-            {
-              "id": "result_summary",
-              "value": "=Workflow executed successfully",
-              "type": "string"
-            }
-          ]
-        }
+        "method": "GET",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/models",
+        "authentication": "bearerToken"
       },
-      "id": "transform_results",
-      "name": "Transform Results",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        1250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $json.webhook_url }}",
-        "body": "={{ $json }}",
-        "options": {}
-      },
-      "id": "webhook_callback",
-      "name": "Send Webhook Callback",
+      "id": "http-request-list-models",
+      "name": "HTTP Request - List Models",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1500,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "errorMessage": "=Workflow execution failed",
-        "triggerType": "errorMessage"
-      },
-      "id": "error_handler",
-      "name": "Error Handler",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [
-        500,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "error_status",
-              "value": "=error",
-              "type": "string"
-            },
-            {
-              "id": "error_details",
-              "value": "={{ $json.error.message }}",
-              "type": "string"
-            }
-          ]
-        }
-      },
-      "id": "format_error",
-      "name": "Format Error Response",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        750,
+        450,
         600
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.error_webhook_url }}",
-        "body": "={{ $json }}",
-        "options": {}
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/applications",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $node.webhook-trigger.json.app_name }}"
+            },
+            {
+              "name": "model_id",
+              "value": "={{ $node.webhook-trigger.json.model_id }}"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $node.webhook-trigger.json.prompt }}"
+            }
+          ]
+        }
       },
-      "id": "error_webhook",
-      "name": "Send Error Callback",
+      "id": "http-request-create-app",
+      "name": "HTTP Request - Create Application",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1000,
+        650,
         600
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/applications/{{ $node['http-request-create-app'].json.id }}/logs",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "={{ $node['http-request-workflow'].json.status }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        }
+      },
+      "id": "http-request-log-app-activity",
+      "name": "HTTP Request - Log App Activity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "code": "// Process workflow execution results\nconst result = $input.all();\nconst processedData = result.map(item => ({\n  workflow_id: item.json.workflow_id,\n  status: item.json.status,\n  output: item.json.output,\n  timestamp: new Date().toISOString()\n}));\nreturn processedData;"
+      },
+      "id": "code-process-results",
+      "name": "Code - Process Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.DIFY_API_URL }}/api/v1/applications/{{ $node['http-request-create-app'].json.id }}/invoke",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $node.webhook-trigger.json.query }}"
+            },
+            {
+              "name": "context",
+              "value": "={{ $node['http-request-workflow'].json.context }}"
+            }
+          ]
+        }
+      },
+      "id": "http-request-invoke-app",
+      "name": "HTTP Request - Invoke Application",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
+        450
       ]
     }
   ],
   "connections": {
-    "webhook_trigger": {
+    "webhook-trigger": {
       "main": [
         [
           {
-            "node": "execute_workflow",
+            "node": "http-request-workflow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "http-request-create-dataset",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "http-request-list-models",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "execute_workflow": {
+    "http-request-workflow": {
       "main": [
         [
           {
-            "node": "invoke_llm_app",
+            "node": "http-request-get-status",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "http-request-create-app",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "invoke_llm_app": {
+    "http-request-get-status": {
       "main": [
         [
           {
-            "node": "fetch_app_logs",
+            "node": "set-response-data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "code-process-results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch_app_logs": {
+    "http-request-create-dataset": {
       "main": [
         [
           {
-            "node": "fetch_analytics",
+            "node": "http-request-upload-document",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch_analytics": {
+    "http-request-list-models": {
       "main": [
         [
           {
-            "node": "transform_results",
+            "node": "http-request-create-app",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "transform_results": {
+    "http-request-create-app": {
       "main": [
         [
           {
-            "node": "webhook_callback",
+            "node": "http-request-invoke-app",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "http-request-log-app-activity",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "error_handler": {
+    "http-request-invoke-app": {
       "main": [
         [
           {
-            "node": "format_error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "format_error": {
-      "main": [
-        [
-          {
-            "node": "error_webhook",
+            "node": "http-request-log-app-activity",
             "type": "main",
             "index": 0
           }
@@ -312,11 +350,14 @@
       ]
     }
   },
+  "active": false,
+  "nodeTypes": {
+    "n8n-nodes-base.webhook": {},
+    "n8n-nodes-base.httpRequest": {},
+    "n8n-nodes-base.set": {},
+    "n8n-nodes-base.code": {}
+  },
   "settings": {
     "executionOrder": "v1"
-  },
-  "staticData": null,
-  "tags": [],
-  "triggerCount": 0,
-  "pinData": {}
+  }
 }

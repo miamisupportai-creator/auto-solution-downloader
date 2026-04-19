@@ -1,171 +1,45 @@
 {
-  "name": "agent-browser CI/CD Automation",
+  "name": "agent-browser Benchmark & Evaluation Workflow",
   "nodes": [
     {
       "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "everyDay",
-            "hour": 0,
-            "minute": 0
-          }
-        ]
+        "trigger": "everyDay",
+        "hour": 2,
+        "minute": 0
       },
       "id": "Schedule_Trigger",
       "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "type": "n8n-nodes-base.schedule",
       "typeVersion": 1,
-      "position": [
-        50,
-        250
-      ]
-    },
-    {
-      "parameters": {
-        "httpMethod": "GET",
-        "url": "https://registry.npmjs.org/agent-browser",
-        "options": {}
-      },
-      "id": "Check_NPM_Version",
-      "name": "Check NPM Version",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        250,
-        250
-      ]
-    },
-    {
-      "parameters": {
-        "code": "const npmData = $input.all()[0].json.json;\nconst npmVersion = npmData['dist-tags'].latest;\nconst localVersion = $env.PKG_VERSION || '0.0.0';\nreturn {\n  npmVersion,\n  localVersion,\n  shouldRelease: npmVersion !== localVersion,\n  needsGithubRelease: true\n};"
-      },
-      "id": "Compare_Versions",
-      "name": "Compare Versions",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        450,
-        250
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "value1": "{{ $json.shouldRelease }}",
-              "operator": "equals",
-              "value2": true
-            }
-          ],
-          "combinator": "and"
-        }
-      },
-      "id": "Should_Release_Decision",
-      "name": "Should Release Decision",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        650,
-        250
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/release.yml/dispatches",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "token {{ $env.GITHUB_TOKEN }}"
-            },
-            {
-              "name": "X-GitHub-Api-Version",
-              "value": "2022-11-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParametersUi": "json",
-        "body": "{\n  \"ref\": \"main\"\n}",
-        "options": {}
-      },
-      "id": "Trigger_Release_Workflow",
-      "name": "Trigger Release Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        100
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/ci.yml/dispatches",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "token {{ $env.GITHUB_TOKEN }}"
-            },
-            {
-              "name": "X-GitHub-Api-Version",
-              "value": "2022-11-28"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParametersUi": "json",
-        "body": "{\n  \"ref\": \"main\"\n}",
-        "options": {}
-      },
-      "id": "Trigger_CI_Workflow",
-      "name": "Trigger CI Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        250
-      ]
-    },
-    {
-      "parameters": {
-        "code": "return {\n  status: 'Release workflow triggered',\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "Release_Success",
-      "name": "Release Success",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1050,
-        100
-      ]
-    },
-    {
-      "parameters": {
-        "code": "return {\n  status: 'No release needed',\n  reason: 'Version unchanged on npm',\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "No_Release_Needed",
-      "name": "No Release Needed",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        850,
-        400
-      ]
+      "position": [50, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/tags/v{{ $json.localVersion }}",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth"
+      },
+      "id": "Get_Latest_Release",
+      "name": "Get Latest Release",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const release = $input.first().json;\nreturn {\n  version: release.tag_name.replace('v', ''),\n  assets: release.assets.map(a => ({\n    name: a.name,\n    download_url: a.browser_download_url,\n    size: a.size\n  }))\n};"
+      },
+      "id": "Parse_Release_Info",
+      "name": "Parse Release Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/create",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -173,37 +47,238 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "token {{ $env.GITHUB_TOKEN }}"
-            },
-            {
-              "name": "X-GitHub-Api-Version",
-              "value": "2022-11-28"
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
             }
           ]
         },
-        "options": {}
+        "body": {
+          "parameters": {
+            "teamId": "={{ $env.SANDBOX_VERCEL_TEAM_ID }}",
+            "projectId": "={{ $env.SANDBOX_VERCEL_PROJECT_ID }}",
+            "runtime": "node22",
+            "resources": {
+              "vcpus": 8
+            }
+          }
+        }
       },
-      "id": "Check_GitHub_Release",
-      "name": "Check GitHub Release",
+      "id": "Create_Sandbox",
+      "name": "Create Sandbox",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        450,
-        400
-      ]
+      "position": [650, 300]
     },
     {
       "parameters": {
-        "code": "const releaseExists = $input.all().some(node => node.json?.id);\nreturn {\n  releaseExists\n};"
+        "functionCode": "const sandbox = $input.first().json;\nreturn {\n  sandboxId: sandbox.id,\n  status: 'created',\n  createdAt: new Date().toISOString()\n};"
       },
-      "id": "Parse_Release_Check",
-      "name": "Parse Release Check",
+      "id": "Extract_Sandbox_ID",
+      "name": "Extract Sandbox ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        650,
-        400
-      ]
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "body": {
+          "parameters": {
+            "command": "sh",
+            "args": [
+              "-c",
+              "sudo dnf install -y gcc gcc-c++ make perl-core openssl-devel nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs"
+            ]
+          }
+        }
+      },
+      "id": "Install_Dependencies",
+      "name": "Install Dependencies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "body": {
+          "parameters": {
+            "command": "npm",
+            "args": [
+              "install",
+              "-g",
+              "agent-browser"
+            ]
+          }
+        }
+      },
+      "id": "Install_Node_Daemon",
+      "name": "Install Node Daemon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "body": {
+          "parameters": {
+            "command": "sh",
+            "args": [
+              "-c",
+              "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && git clone --depth 1 --branch main https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser && cd /tmp/agent-browser/cli && cargo build --release"
+            ]
+          }
+        }
+      },
+      "id": "Build_Native_Daemon",
+      "name": "Build Native Daemon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "body": {
+          "parameters": {
+            "command": "sh",
+            "args": [
+              "-c",
+              "export AGENT_BROWSER_SESSION=bench-node && agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser eval 'document.title' && agent-browser close"
+            ]
+          }
+        }
+      },
+      "id": "Run_Node_Benchmark",
+      "name": "Run Node Benchmark",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "body": {
+          "parameters": {
+            "command": "sh",
+            "args": [
+              "-c",
+              "export AGENT_BROWSER_SESSION=bench-native && agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser eval 'document.title' && agent-browser close"
+            ]
+          }
+        }
+      },
+      "id": "Run_Native_Benchmark",
+      "name": "Run Native Benchmark",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SANDBOX_API_URL }}/{{ $node.Extract_Sandbox_ID.json.sandboxId }}/stop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "id": "Cleanup_Sandbox",
+      "name": "Cleanup Sandbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const nodeResult = $node.Run_Node_Benchmark.json;\nconst nativeResult = $node.Run_Native_Benchmark.json;\nconst release = $node.Parse_Release_Info.json;\n\nreturn {\n  benchmark_results: {\n    version: release.version,\n    timestamp: new Date().toISOString(),\n    node_daemon: nodeResult,\n    native_daemon: nativeResult,\n    comparison: 'completed'\n  }\n};"
+      },
+      "id": "Aggregate_Results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RESULTS_WEBHOOK_URL }}",
+        "body": {
+          "parameters": "{{ $node.Aggregate_Results.json }}"
+        }
+      },
+      "id": "Send_Results",
+      "name": "Send Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 300]
     }
   ],
   "connections": {
@@ -211,85 +286,133 @@
       "main": [
         [
           {
-            "node": "Check_NPM_Version",
+            "node": "Get_Latest_Release",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check_NPM_Version": {
+    "Get_Latest_Release": {
       "main": [
         [
           {
-            "node": "Compare_Versions",
+            "node": "Parse_Release_Info",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Compare_Versions": {
+    "Parse_Release_Info": {
       "main": [
         [
           {
-            "node": "Should_Release_Decision",
+            "node": "Create_Sandbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create_Sandbox": {
+      "main": [
+        [
+          {
+            "node": "Extract_Sandbox_ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract_Sandbox_ID": {
+      "main": [
+        [
+          {
+            "node": "Install_Dependencies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Install_Dependencies": {
+      "main": [
+        [
+          {
+            "node": "Install_Node_Daemon",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Check_GitHub_Release",
+            "node": "Build_Native_Daemon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Should_Release_Decision": {
+    "Install_Node_Daemon": {
       "main": [
         [
           {
-            "node": "Trigger_Release_Workflow",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "No_Release_Needed",
+            "node": "Run_Node_Benchmark",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Trigger_Release_Workflow": {
+    "Build_Native_Daemon": {
       "main": [
         [
           {
-            "node": "Release_Success",
+            "node": "Run_Native_Benchmark",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check_GitHub_Release": {
+    "Run_Node_Benchmark": {
       "main": [
         [
           {
-            "node": "Parse_Release_Check",
+            "node": "Cleanup_Sandbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse_Release_Check": {
+    "Run_Native_Benchmark": {
       "main": [
         [
           {
-            "node": "Trigger_CI_Workflow",
+            "node": "Cleanup_Sandbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup_Sandbox": {
+      "main": [
+        [
+          {
+            "node": "Aggregate_Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate_Results": {
+      "main": [
+        [
+          {
+            "node": "Send_Results",
             "type": "main",
             "index": 0
           }
@@ -300,7 +423,5 @@
   "active": true,
   "settings": {
     "executionOrder": "v1"
-  },
-  "staticData": null,
-  "pinData": {}
+  }
 }
