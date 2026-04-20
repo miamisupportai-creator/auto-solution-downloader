@@ -1,566 +1,269 @@
 {
-  "name": "Dify LLM App Development Platform",
+  "name": "Dify LLM Application Development Platform",
   "nodes": [
     {
       "parameters": {},
-      "id": "trigger",
+      "id": "webhook-trigger",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        50,
-        300
-      ],
+      "position": [250, 300],
       "webhookId": "dify-webhook"
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/workflows/execute",
         "method": "POST",
+        "url": "=http://localhost:3000/api/workflows/execute",
         "authentication": "genericCredentialType",
         "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "workflow_id",
-              "value": "={{ $node.trigger.json.workflow_id }}"
-            },
             {
               "name": "inputs",
-              "value": "={{ $node.trigger.json.inputs }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
+              "value": "={{ $json.payload }}"
             }
           ]
         }
       },
-      "id": "executeWorkflow",
-      "name": "Execute Dify Workflow",
+      "id": "call-dify-api",
+      "name": "Call Dify API",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/datasets/{{ $node.trigger.json.dataset_id }}/documents",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "file",
-              "value": "={{ $node.trigger.json.file }}"
-            },
-            {
-              "name": "metadata",
-              "value": "={{ $node.trigger.json.metadata }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            }
-          ]
-        }
-      },
-      "id": "ingestDocument",
-      "name": "Ingest Document",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        250,
-        450
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/datasets/{{ $node.trigger.json.dataset_id }}/retrieve",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "query",
-              "value": "={{ $node.trigger.json.query }}"
-            },
-            {
-              "name": "limit",
-              "value": "=10"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "id": "retrieveDocuments",
-      "name": "Retrieve Documents (RAG)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        250,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/chat-messages",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "app_id",
-              "value": "={{ $node.trigger.json.app_id }}"
-            },
-            {
-              "name": "inputs",
-              "value": "={{ $node.trigger.json.message_inputs }}"
-            },
-            {
-              "name": "query",
-              "value": "={{ $node.trigger.json.user_query }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "id": "sendChatMessage",
-      "name": "Send Chat Message",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/workflows",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "name",
-              "value": "={{ $node.trigger.json.workflow_name }}"
-            },
-            {
-              "name": "description",
-              "value": "={{ $node.trigger.json.workflow_description }}"
-            },
-            {
-              "name": "nodes",
-              "value": "={{ $node.trigger.json.workflow_nodes }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "id": "createWorkflow",
-      "name": "Create Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        450,
-        150
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/agents",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "app_id",
-              "value": "={{ $node.trigger.json.app_id }}"
-            },
-            {
-              "name": "tools",
-              "value": "={{ $node.trigger.json.tools }}"
-            },
-            {
-              "name": "mode",
-              "value": "={{ $node.trigger.json.agent_mode }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "id": "configureAgent",
-      "name": "Configure Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        450,
-        600
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/logs",
-        "method": "GET",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            }
-          ]
-        }
-      },
-      "id": "fetchLogs",
-      "name": "Fetch Application Logs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        650,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "=https://api.dify.ai/datasets",
-        "method": "POST",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "name",
-              "value": "={{ $node.trigger.json.dataset_name }}"
-            },
-            {
-              "name": "description",
-              "value": "={{ $node.trigger.json.dataset_description }}"
-            }
-          ]
-        },
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        }
-      },
-      "id": "createDataset",
-      "name": "Create Dataset",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        450,
-        450
-      ]
+      "typeVersion": 4,
+      "position": [450, 300]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
             {
-              "id": "1",
-              "name": "workflow_status",
-              "value": "={{ $node.executeWorkflow.json.status }}"
+              "id": "workflow_id",
+              "name": "workflow_id",
+              "type": "string",
+              "value": "={{ $json.data.workflow_id }}"
             },
             {
-              "id": "2",
-              "name": "execution_result",
-              "value": "={{ $node.executeWorkflow.json.result }}"
+              "id": "execution_status",
+              "name": "execution_status",
+              "type": "string",
+              "value": "={{ $json.data.status }}"
             },
             {
-              "id": "3",
-              "name": "document_count",
-              "value": "={{ $node.retrieveDocuments.json.documents.length }}"
-            },
-            {
-              "id": "4",
-              "name": "agent_status",
-              "value": "={{ $node.configureAgent.json.status }}"
+              "id": "outputs",
+              "name": "outputs",
+              "type": "object",
+              "value": "={{ $json.data.outputs }}"
             }
           ]
         }
       },
-      "id": "processResults",
-      "name": "Process Results",
+      "id": "transform-response",
+      "name": "Transform Response",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
-      "position": [
-        800,
-        300
-      ]
+      "typeVersion": 3,
+      "position": [650, 300]
     },
     {
       "parameters": {
         "conditions": {
           "conditions": [
             {
-              "id": "1",
+              "id": "condition_1",
+              "name": "Check Status",
+              "type": "string",
               "operator": {
                 "name": "filter.operator.equals",
+                "type": "string",
                 "value": "equals"
               },
-              "leftValue": "={{ $node.processResults.json.workflow_status }}",
-              "rightValue": "success"
+              "value": "completed",
+              "leftValue": "={{ $json.execution_status }}"
             }
           ]
         }
       },
-      "id": "validateResults",
-      "name": "Validate Workflow Status",
+      "id": "check-execution-status",
+      "name": "Check Execution Status",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        950,
-        300
-      ]
+      "position": [850, 300]
     },
     {
       "parameters": {
-        "url": "=https://api.dify.ai/webhooks/{{ $node.trigger.json.callback_url }}",
         "method": "POST",
+        "url": "=http://localhost:3000/api/logs/save",
         "authentication": "genericCredentialType",
         "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
-              "name": "status",
-              "value": "=complete"
+              "name": "workflow_id",
+              "value": "={{ $json.workflow_id }}"
             },
             {
-              "name": "data",
-              "value": "={{ $node.processResults.json }}"
+              "name": "status",
+              "value": "={{ $json.execution_status }}"
+            },
+            {
+              "name": "outputs",
+              "value": "={{ $json.outputs }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
             }
           ]
         }
       },
-      "id": "sendCallback",
-      "name": "Send Callback",
+      "id": "log-workflow-execution",
+      "name": "Log Workflow Execution",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1100,
-        200
-      ]
+      "typeVersion": 4,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:3000/api/error-handler",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.DIFY_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "error",
+              "value": "={{ $json.execution_status }}"
+            },
+            {
+              "name": "workflow_id",
+              "value": "={{ $json.workflow_id }}"
+            }
+          ]
+        }
+      },
+      "id": "handle-execution-error",
+      "name": "Handle Execution Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "respondWithData": true
+      },
+      "id": "webhook-response-success",
+      "name": "Webhook Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "respondWithData": true
+      },
+      "id": "webhook-response-error",
+      "name": "Webhook Response Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 400]
     }
   ],
   "connections": {
-    "trigger": {
+    "webhook-trigger": {
       "main": [
         [
           {
-            "node": "executeWorkflow",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "ingestDocument",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "createWorkflow",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "createDataset",
+            "node": "call-dify-api",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "executeWorkflow": {
+    "call-dify-api": {
       "main": [
         [
           {
-            "node": "sendChatMessage",
+            "node": "transform-response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "ingestDocument": {
+    "transform-response": {
       "main": [
         [
           {
-            "node": "retrieveDocuments",
+            "node": "check-execution-status",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "retrieveDocuments": {
+    "check-execution-status": {
       "main": [
         [
           {
-            "node": "processResults",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "sendChatMessage": {
-      "main": [
-        [
-          {
-            "node": "fetchLogs",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "createWorkflow": {
-      "main": [
-        [
-          {
-            "node": "processResults",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "configureAgent": {
-      "main": [
-        [
-          {
-            "node": "processResults",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "fetchLogs": {
-      "main": [
-        [
-          {
-            "node": "processResults",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "createDataset": {
-      "main": [
-        [
-          {
-            "node": "ingestDocument",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "processResults": {
-      "main": [
-        [
-          {
-            "node": "validateResults",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "validateResults": {
-      "main": [
-        [
-          {
-            "node": "sendCallback",
+            "node": "log-workflow-execution",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "sendCallback",
+            "node": "handle-execution-error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log-workflow-execution": {
+      "main": [
+        [
+          {
+            "node": "webhook-response-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "handle-execution-error": {
+      "main": [
+        [
+          {
+            "node": "webhook-response-error",
             "type": "main",
             "index": 0
           }
@@ -568,7 +271,7 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }

@@ -1,183 +1,156 @@
 {
-  "name": "Khoj File Synchronization Workflow",
+  "name": "Khoj Content Sync Workflow",
   "nodes": [
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "intervalUnit": "minutes",
-              "intervalValue": 10
-            }
-          ]
-        }
+        "triggerTimes": [
+          {
+            "mode": "everyX",
+            "value": 10,
+            "unit": "minutes"
+          }
+        ]
       },
-      "id": "trigger_schedule",
+      "id": "trigger_sync",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [
-        50,
+        250,
         300
       ]
     },
     {
       "parameters": {
-        "functionCode": "const fs = require('fs');\nconst path = require('path');\n\nconst textFileTypes = ['org', 'md', 'markdown', 'txt', 'html', 'xml', 'json', 'csv', 'py', 'js', 'java', 'go', 'rs'];\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst validFileTypes = textFileTypes.concat(binaryFileTypes);\n\nfunction isSupportedFileType(filePath) {\n  const fileExtension = filePath.split('.').pop().toLowerCase();\n  return validFileTypes.includes(fileExtension);\n}\n\nfunction processDirectory(filesToPush, folderPath) {\n  try {\n    const files = fs.readdirSync(folderPath, { withFileTypes: true });\n    for (const file of files) {\n      if (file.name.startsWith('.')) continue;\n      const filePath = path.join(folderPath, file.name);\n      if (file.isFile() && isSupportedFileType(filePath)) {\n        filesToPush.push(filePath);\n      }\n      if (file.isDirectory()) {\n        processDirectory(filesToPush, filePath);\n      }\n    }\n  } catch (err) {\n    console.error(`Error reading directory ${folderPath}:`, err.message);\n  }\n}\n\nconst filesToProcess = [];\nconst configuredFolders = $input.global.get('folders') || [];\nconst configuredFiles = $input.global.get('files') || [];\n\n// Add individual files\nfor (const file of configuredFiles) {\n  if (fs.existsSync(file.path)) {\n    filesToProcess.push(file.path);\n  }\n}\n\n// Process folders recursively\nfor (const folder of configuredFolders) {\n  if (fs.existsSync(folder.path)) {\n    processDirectory(filesToProcess, folder.path);\n  }\n}\n\nreturn {\n  filesToProcess: filesToProcess,\n  lastSync: $input.global.get('lastSync') || []\n};"
+        "functionCode": "const filesToIndex = $input.all();\nreturn filesToIndex;"
       },
       "id": "collect_files",
       "name": "Collect Files to Sync",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs');\nconst lastSync = $input.item.json.lastSync;\nconst filesToProcess = $input.item.json.filesToProcess;\n\nfunction filenameToMimeType(filename) {\n  const extension = filename.split('.').pop().toLowerCase();\n  const mimeTypes = {\n    'pdf': 'application/pdf',\n    'png': 'image/png',\n    'jpg': 'image/jpeg',\n    'jpeg': 'image/jpeg',\n    'webp': 'image/webp',\n    'md': 'text/markdown',\n    'org': 'text/org',\n    'txt': 'text/plain',\n    'json': 'application/json'\n  };\n  return mimeTypes[extension] || 'text/plain';\n}\n\nconst binaryFileTypes = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];\nconst filesDataToPush = [];\n\nfor (const file of filesToProcess) {\n  try {\n    const stats = fs.statSync(file);\n    const syncedFile = lastSync.find(f => f.path === file);\n    \n    // Check if file has been modified since last sync\n    if (!syncedFile || new Date(stats.mtime) > new Date(syncedFile.datetime)) {\n      const encoding = binaryFileTypes.includes(file.split('.').pop()) ? 'binary' : 'utf8';\n      const fileContent = fs.readFileSync(file, { encoding: encoding });\n      const mimeType = filenameToMimeType(file) + (encoding === 'utf8' ? '; charset=UTF-8' : '');\n      \n      filesDataToPush.push({\n        path: file,\n        mimeType: mimeType,\n        content: fileContent,\n        modified: stats.mtime.toISOString()\n      });\n    }\n  } catch (err) {\n    console.error(`Error processing file ${file}:`, err.message);\n  }\n}\n\nreturn {\n  filesDataToPush: filesDataToPush,\n  lastSync: lastSync\n};"
-      },
-      "id": "prepare_file_data",
-      "name": "Prepare File Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         450,
         300
-      ]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "={{ $input.global.get('hostURL') || 'https://app.khoj.dev' }}/api/content?client=desktop",
-        "sendBody": true,
-        "bodyParametersUi": "keyvaluepairs",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "files",
-              "value": "={{ $input.item.json.filesDataToPush }}"
-            }
-          ]
-        },
-        "authentication": "headerAuth",
-        "headerAuthorizationCredentials": "={{ 'Bearer ' + $input.global.get('khojToken') }}"
-      },
-      "id": "sync_files_patch",
-      "name": "Sync Files (PATCH)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        650,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "={{ $input.global.get('hostURL') || 'https://app.khoj.dev' }}/api/content?client=desktop",
-        "sendBody": true,
-        "bodyParametersUi": "keyvaluepairs",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "files",
-              "value": "={{ $input.item.json.filesDataToPush }}"
-            }
-          ]
-        },
-        "authentication": "headerAuth",
-        "headerAuthorizationCredentials": "={{ 'Bearer ' + $input.global.get('khojToken') }}"
-      },
-      "id": "sync_files_put",
-      "name": "Sync Files (PUT - Regenerate)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        650,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const filesToProcess = $input.item.json.filesToProcess;\nconst successfulFiles = $input.item.json.successfulFiles || filesToProcess;\n\nconst updatedLastSync = successfulFiles.map(file => ({\n  path: file,\n  datetime: new Date().toISOString()\n}));\n\nreturn {\n  lastSync: updatedLastSync\n};"
-      },
-      "id": "update_sync_timestamp",
-      "name": "Update Sync Timestamp",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        850,
-        300
+      ],
+      "dependsOn": [
+        "trigger_sync"
       ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $input.global.get('hostURL') || 'https://app.khoj.dev' }}/api/v1/user?client=desktop",
-        "authentication": "headerAuth",
-        "headerAuthorizationCredentials": "={{ 'Bearer ' + $input.global.get('khojToken') }}"
+        "url": "{{ $env.KHOJ_HOST_URL }}/api/v1/user",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer {{ $env.KHOJ_API_TOKEN }}"
+          }
+        }
       },
-      "id": "fetch_user_info",
-      "name": "Fetch User Info",
+      "id": "validate_auth",
+      "name": "Validate Authentication",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        250,
-        500
+        650,
+        300
+      ],
+      "dependsOn": [
+        "collect_files"
       ]
     },
     {
       "parameters": {
-        "errorMessage": "Sync failed: {{ $input.item.json.error }}",
-        "continueOnFail": true
+        "method": "PATCH",
+        "url": "{{ $env.KHOJ_HOST_URL }}/api/content",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParametersUi": "keyvaluepairs",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client",
+              "value": "workflow"
+            }
+          ]
+        },
+        "options": {
+          "headers": {
+            "Authorization": "Bearer {{ $env.KHOJ_API_TOKEN }}"
+          }
+        }
+      },
+      "id": "sync_content",
+      "name": "Sync Content to Khoj",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        850,
+        300
+      ],
+      "dependsOn": [
+        "validate_auth"
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const syncResult = $input.all()[0];\nif (syncResult.statusCode === 200) {\n  return { success: true, synced_files: syncResult.data };\n} else {\n  return { success: false, error: syncResult.statusMessage };\n}"
+      },
+      "id": "process_result",
+      "name": "Process Sync Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        300
+      ],
+      "dependsOn": [
+        "sync_content"
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "Sync failed: {{ $json.error }}",
+        "fallbackOutput": true
       },
       "id": "error_handler",
-      "name": "Handle Sync Errors",
+      "name": "Error Handler",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
         850,
-        500
+        450
+      ],
+      "dependsOn": [
+        "sync_content"
       ]
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "name": "syncStatus",
-              "value": "success",
-              "type": "string"
-            },
-            {
-              "name": "timestamp",
-              "value": "={{ new Date().toISOString() }}",
-              "type": "string"
-            }
-          ]
-        }
+        "functionCode": "const lastSync = new Date().toISOString();\nreturn { lastSync, status: 'completed' };"
       },
-      "id": "set_sync_status",
-      "name": "Set Sync Status",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "id": "update_state",
+      "name": "Update Last Sync Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        1050,
+        1250,
         300
+      ],
+      "dependsOn": [
+        "process_result"
       ]
     }
   ],
   "connections": {
-    "trigger_schedule": {
+    "trigger_sync": {
       "main": [
         [
           {
             "node": "collect_files",
-            "indices": [
-              0
-            ]
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -186,58 +159,42 @@
       "main": [
         [
           {
-            "node": "prepare_file_data",
-            "indices": [
-              0
-            ]
+            "node": "validate_auth",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
-    "prepare_file_data": {
+    "validate_auth": {
       "main": [
         [
           {
-            "node": "sync_files_patch",
-            "indices": [
-              0
-            ]
+            "node": "sync_content",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
-    "sync_files_patch": {
+    "sync_content": {
       "main": [
         [
           {
-            "node": "update_sync_timestamp",
-            "indices": [
-              0
-            ]
+            "node": "process_result",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
-    "update_sync_timestamp": {
+    "process_result": {
       "main": [
         [
           {
-            "node": "set_sync_status",
-            "indices": [
-              0
-            ]
-          }
-        ]
-      ]
-    },
-    "set_sync_status": {
-      "main": [
-        [
-          {
-            "node": "fetch_user_info",
-            "indices": [
-              0
-            ]
+            "node": "update_state",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -245,6 +202,14 @@
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1"
-  }
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "any"
+  },
+  "staticData": null,
+  "tags": [
+    "khoj",
+    "sync",
+    "content-indexing"
+  ]
 }
