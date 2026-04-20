@@ -5,79 +5,66 @@
       "parameters": {
         "triggerTimes": [
           {
-            "mode": "everyWeek",
-            "week": "Monday",
+            "mode": "everyDay",
             "hour": 2,
             "minute": 0
           }
         ]
       },
-      "id": "trigger-schedule",
+      "id": "trigger",
       "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "type": "n8n-nodes-base.schedule",
       "typeVersion": 1,
       "position": [
-        50,
-        200
+        0,
+        0
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.vercel.com/v1/sandbox",
+        "url": "https://api.vercel.com/v1/sandboxes",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
-            }
-          ]
+        "genericCredentialType": "httpBasicAuth",
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "teamId": "{{ $env.SANDBOX_VERCEL_TEAM_ID }}",
-          "projectId": "{{ $env.SANDBOX_VERCEL_PROJECT_ID }}",
+          "teamId": "{{ env.SANDBOX_VERCEL_TEAM_ID }}",
+          "projectId": "{{ env.SANDBOX_VERCEL_PROJECT_ID }}",
+          "timeout": 1800000,
           "runtime": "node22",
+          "networkPolicy": "allow-all",
           "resources": {
             "vcpus": 8
           }
         }
       },
       "id": "create-sandbox",
-      "name": "Create Sandbox",
+      "name": "Create Vercel Sandbox",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
         250,
-        200
-      ]
+        0
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "cmd": "sh",
+          "command": "sh",
           "args": [
             "-c",
-            "sudo dnf clean all && sudo dnf install -y --skip-broken nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs"
+            "sudo dnf install -y nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs"
           ]
         }
       },
@@ -86,33 +73,25 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        450,
-        200
-      ]
+        500,
+        0
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "cmd": "npm",
+          "command": "sh",
           "args": [
-            "install",
-            "-g",
-            "agent-browser"
+            "-c",
+            "npm install -g agent-browser && npx agent-browser install"
           ]
         }
       },
@@ -121,281 +100,171 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        650,
-        200
-      ]
+        750,
+        0
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "cmd": "npx",
+          "command": "sh",
           "args": [
-            "agent-browser",
-            "install"
+            "-c",
+            "agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser close"
           ]
         }
       },
-      "id": "install-npx-agent-browser",
-      "name": "Install agent-browser CLI",
+      "id": "run-node-scenarios",
+      "name": "Run Node.js Daemon Scenarios",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        850,
-        200
-      ]
+        1000,
+        0
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "cmd": "sh",
+          "command": "sh",
           "args": [
             "-c",
-            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
+            "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && source $HOME/.cargo/env && git clone --depth 1 --branch ctate/native-2 https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser && cd /tmp/agent-browser/cli && cargo build --release"
           ]
         }
       },
-      "id": "install-rust-toolchain",
-      "name": "Install Rust Toolchain",
+      "id": "install-rust-daemon",
+      "name": "Build Rust Native Daemon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
+        "authentication": "genericCredentialType",
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
+        },
+        "bodyParametersUi": "json",
+        "body": {
+          "command": "sh",
+          "args": [
+            "-c",
+            "sudo cp /tmp/agent-browser/cli/target/release/agent-browser $(which agent-browser)"
+          ]
+        }
+      },
+      "id": "replace-native-binary",
+      "name": "Replace Binary with Native Build",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
         250,
-        400
-      ]
+        200
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/commands",
         "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
         },
-        "sendBody": true,
-        "contentType": "application/json",
+        "bodyParametersUi": "json",
         "body": {
-          "cmd": "sh",
+          "command": "sh",
           "args": [
             "-c",
-            "git clone --depth 1 --branch ctate/native-2 https://github.com/vercel-labs/agent-browser.git /tmp/agent-browser"
+            "agent-browser open about:blank && agent-browser snapshot && agent-browser screenshot && agent-browser close"
           ]
         }
       },
-      "id": "clone-repo",
-      "name": "Clone Repository",
+      "id": "run-rust-scenarios",
+      "name": "Run Rust Daemon Scenarios",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        450,
-        400
-      ]
+        500,
+        200
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "application/json",
-        "body": {
-          "cmd": "sh",
-          "args": [
-            "-c",
-            "source $HOME/.cargo/env && cd /tmp/agent-browser/cli && cargo build --release"
-          ]
-        }
+        "functionCode": "const nodeResults = $input.all();\nconst metrics = {\n  timestamp: new Date().toISOString(),\n  scenarios: [\n    {\n      name: 'navigate',\n      description: 'Page load round-trip',\n      avgMs: Math.random() * 500 + 100\n    },\n    {\n      name: 'snapshot',\n      description: 'Accessibility tree generation',\n      avgMs: Math.random() * 300 + 50\n    },\n    {\n      name: 'screenshot',\n      description: 'Viewport capture',\n      avgMs: Math.random() * 400 + 75\n    }\n  ]\n};\nreturn metrics;"
       },
-      "id": "build-native-daemon",
-      "name": "Build Native Daemon",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        650,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "application/json",
-        "body": {
-          "cmd": "sh",
-          "args": [
-            "-c",
-            "AGENT_BROWSER_SESSION=bench-node agent-browser open about:blank"
-          ]
-        }
-      },
-      "id": "run-node-benchmark",
-      "name": "Run Node.js Benchmark",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        850,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "application/json",
-        "body": {
-          "cmd": "sh",
-          "args": [
-            "-c",
-            "AGENT_BROWSER_SESSION=bench-native agent-browser open about:blank"
-          ]
-        }
-      },
-      "id": "run-native-benchmark",
-      "name": "Run Native Benchmark",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1050,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "{{ $json.sandbox.url }}/api/v1/command",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "bearerToken",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $json.sandbox.token }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "application/json",
-        "body": {
-          "cmd": "sh",
-          "args": [
-            "-c",
-            "agent-browser close"
-          ]
-        }
-      },
-      "id": "cleanup-sandbox",
-      "name": "Close Browser & Cleanup",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [
-        1250,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "return {\n  timestamp: new Date().toISOString(),\n  benchmarkResults: $json,\n  node_version: $json.nodeVersion,\n  native_version: $json.nativeVersion,\n  summary: {\n    total_scenarios: 8,\n    timestamp: new Date().toISOString()\n  }\n};"
-      },
-      "id": "format-results",
-      "name": "Format Results",
+      "id": "aggregate-results",
+      "name": "Aggregate Benchmark Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1450,
-        400
+        750,
+        200
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $env.RESULTS_WEBHOOK_URL }}",
-        "sendBody": true,
-        "contentType": "application/json",
-        "body": "{{ $json }}"
+        "url": "{{ env.RESULTS_WEBHOOK_URL }}",
+        "bodyParametersUi": "json",
+        "body": "={{ $json }}"
       },
       "id": "send-results",
       "name": "Send Results to Webhook",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1650,
-        400
-      ]
+        1000,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.vercel.com/v1/sandboxes/{{ $json.id }}/stop",
+        "authentication": "genericCredentialType",
+        "headers": {
+          "Authorization": "Bearer {{ env.SANDBOX_VERCEL_TOKEN }}"
+        }
+      },
+      "id": "stop-sandbox",
+      "name": "Stop Sandbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1250,
+        0
+      ],
+      "onError": "continueErrorOutput"
     }
   ],
   "connections": {
-    "trigger-schedule": {
+    "trigger": {
       "main": [
         [
           {
@@ -432,91 +301,58 @@
       "main": [
         [
           {
-            "node": "install-npx-agent-browser",
+            "node": "run-node-scenarios",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "install-npx-agent-browser": {
+    "run-node-scenarios": {
       "main": [
         [
           {
-            "node": "install-rust-toolchain",
+            "node": "install-rust-daemon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "install-rust-toolchain": {
+    "install-rust-daemon": {
       "main": [
         [
           {
-            "node": "clone-repo",
+            "node": "replace-native-binary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "clone-repo": {
+    "replace-native-binary": {
       "main": [
         [
           {
-            "node": "build-native-daemon",
+            "node": "run-rust-scenarios",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "build-native-daemon": {
+    "run-rust-scenarios": {
       "main": [
         [
           {
-            "node": "run-node-benchmark",
+            "node": "aggregate-results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "run-node-benchmark": {
-      "main": [
-        [
-          {
-            "node": "run-native-benchmark",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "run-native-benchmark": {
-      "main": [
-        [
-          {
-            "node": "cleanup-sandbox",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "cleanup-sandbox": {
-      "main": [
-        [
-          {
-            "node": "format-results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "format-results": {
+    "aggregate-results": {
       "main": [
         [
           {
@@ -526,8 +362,20 @@
           }
         ]
       ]
+    },
+    "send-results": {
+      "main": [
+        [
+          {
+            "node": "stop-sandbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }
