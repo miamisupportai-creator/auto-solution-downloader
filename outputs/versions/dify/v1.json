@@ -1,271 +1,271 @@
 {
-  "name": "Dify LLM Application Development Platform",
+  "name": "Dify - LLM Application Development Platform",
   "nodes": [
     {
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyMinute"
+          }
+        ]
+      },
+      "id": "Schedule Trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract key automation logic from Dify repository\n// System Purpose: LLM app development platform with workflow, RAG, agents, and observability\n// Primary Functions:\n// 1. Workflow orchestration and execution\n// 2. RAG pipeline management\n// 3. Agent capability coordination\n// 4. Model management across providers\n// 5. Observability and tracing (OpenTelemetry, Langfuse, Opik, Arize Phoenix)\n// 6. Application logging and monitoring\n\nreturn {\n  system: 'Dify LLM Platform',\n  capabilities: [\n    'AI Workflow Building',\n    'RAG Pipeline Execution',\n    'Agent Management',\n    'Multi-Model Support (GPT, Mistral, Llama3, etc)',\n    'OpenTelemetry Integration',\n    'Trace Management',\n    'Application Monitoring',\n    'Message Logging',\n    'Dataset Management'\n  ],\n  deployment: {\n    containerized: true,\n    docker_compose: true,\n    kubernetes_ready: true,\n    self_hosted: true,\n    cloud: 'https://cloud.dify.ai'\n  },\n  core_services: [\n    'API Backend',\n    'Web Frontend',\n    'PostgreSQL Database',\n    'Redis Cache',\n    'Vector Database (Weaviate/Milvus/etc)',\n    'Celery Worker',\n    'Scheduler (Beat)'\n  ]\n};"
+      },
+      "id": "Parse Dify Configuration",
+      "name": "Parse Dify Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract automation workflows from Dify documentation\n// Key Automations Identified:\n\nconst automations = {\n  workflow_execution: {\n    description: 'Execute AI workflows on visual canvas',\n    inputs: ['workflow_config', 'input_data'],\n    outputs: ['execution_result', 'logs'],\n    trigger: 'webhook_or_schedule'\n  },\n  rag_pipeline: {\n    description: 'Document ingestion and retrieval pipeline',\n    steps: [\n      'document_upload',\n      'text_extraction',\n      'embedding_generation',\n      'vector_storage',\n      'semantic_search'\n    ]\n  },\n  agent_execution: {\n    description: 'Agent-based task execution with tools',\n    capabilities: [\n      'llm_function_calling',\n      'react_pattern',\n      'tool_integration',\n      'reasoning_loop'\n    ]\n  },\n  observability: {\n    description: 'Application monitoring and tracing',\n    services: [\n      'OpenTelemetry_export',\n      'Langfuse_integration',\n      'Opik_tracing',\n      'Arize_Phoenix_monitoring'\n    ]\n  },\n  model_management: {\n    description: 'Multi-provider LLM integration',\n    providers: [\n      'OpenAI',\n      'Mistral',\n      'Llama',\n      'Custom_OpenAI_compatible'\n    ]\n  }\n};\n\nreturn automations;"
+      },
+      "id": "Extract Automation Logic",
+      "name": "Extract Automation Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v1/workflows",
+        "method": "GET",
+        "authentication": "none",
+        "responseFormat": "json"
+      },
+      "id": "Query Dify API - Workflows",
+      "name": "Query Dify API - Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        850,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v1/apps",
+        "method": "GET",
+        "authentication": "none",
+        "responseFormat": "json"
+      },
+      "id": "Query Dify API - Apps",
+      "name": "Query Dify API - Apps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        850,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/v1/messages",
+        "method": "GET",
+        "authentication": "none",
+        "responseFormat": "json"
+      },
+      "id": "Query Dify API - Messages",
+      "name": "Query Dify API - Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        850,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process and transform Dify API responses\nconst workflows = $input.all()[0].json;\nconst apps = $input.all()[1].json;\nconst messages = $input.all()[2].json;\n\nconst processed = {\n  total_workflows: workflows?.data?.length || 0,\n  total_apps: apps?.data?.length || 0,\n  total_messages: messages?.data?.length || 0,\n  workflows: workflows?.data || [],\n  apps: apps?.data || [],\n  messages: messages?.data || [],\n  timestamp: new Date().toISOString()\n};\n\nreturn processed;"
+      },
+      "id": "Transform API Responses",
+      "name": "Transform API Responses",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1050,
+        350
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate observability trace data structure\nconst traceData = {\n  service_name: 'dify',\n  signals: {\n    traces: {\n      workflow_runs: {\n        span_type: 'dify.workflow.run',\n        includes: ['workflow_id', 'status', 'duration', 'model_calls']\n      },\n      node_execution: {\n        span_type: 'dify.node.execution',\n        includes: ['node_id', 'node_type', 'input', 'output', 'duration']\n      },\n      message_events: {\n        span_type: 'dify.message',\n        includes: ['message_id', 'content', 'tokens', 'cost']\n      }\n    },\n    metrics: {\n      workflow_counter: 'dify.workflow.total',\n      message_counter: 'dify.message.total',\n      token_counter: 'dify.tokens.total',\n      error_counter: 'dify.errors.total'\n    },\n    logs: {\n      structured: true,\n      includes_trace_id: true,\n      includes_span_id: true,\n      content_gating: 'configurable'\n    }\n  },\n  otel_endpoint: process.env.ENTERPRISE_OTLP_ENDPOINT || 'http://localhost:4318',\n  sampling_rate: parseFloat(process.env.ENTERPRISE_OTEL_SAMPLING_RATE || '1.0')\n};\n\nreturn traceData;"
+      },
+      "id": "Generate Observability Config",
+      "name": "Generate Observability Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Aggregate and summarize automation findings\nconst summary = {\n  platform: 'Dify LLM Application Development',\n  automation_patterns: [\n    {\n      name: 'Workflow Orchestration',\n      type: 'Event-driven',\n      trigger: 'User action / Schedule / Webhook',\n      processing: 'Visual workflow execution with node dependencies',\n      output: 'Workflow result + execution logs'\n    },\n    {\n      name: 'RAG Document Pipeline',\n      type: 'Batch Processing',\n      trigger: 'Document upload / Schedule',\n      processing: 'Extract → Embed → Store → Retrieve',\n      output: 'Indexed vectors + retrieval results'\n    },\n    {\n      name: 'Agent Task Execution',\n      type: 'Agentic Loop',\n      trigger: 'User input / API call',\n      processing: 'LLM reasoning + tool invocation + result evaluation',\n      output: 'Agent response + tool call logs'\n    },\n    {\n      name: 'Observability Pipeline',\n      type: 'Continuous Monitoring',\n      trigger: 'Application events',\n      processing: 'Span generation → Log correlation → Metric aggregation',\n      output: 'OpenTelemetry signals → OTLP export'\n    }\n  ],\n  deployment_architectures: [\n    'Docker Compose (local)',\n    'Kubernetes (HA)',\n    'AWS / Azure / GCP (managed)'\n  ],\n  key_integrations: [\n    '50+ LLM providers',\n    'Vector databases (Weaviate, Milvus, PGVector)',\n    'Observability backends (Langfuse, Opik, Arize Phoenix, OTEL)',\n    'Storage systems (S3, Azure Blob, local)'\n  ],\n  api_endpoints: [\n    '/api/v1/workflows',\n    '/api/v1/apps',\n    '/api/v1/messages',\n    '/api/v1/datasets',\n    '/api/v1/models'\n  ]\n};\n\nreturn summary;"
+      },
+      "id": "Generate Automation Summary",
+      "name": "Generate Automation Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1250,
+        400
+      ]
+    },
+    {
       "parameters": {},
-      "id": "webhook-trigger",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
+      "id": "Stop",
+      "name": "Stop",
+      "type": "n8n-nodes-base.stop",
       "typeVersion": 1,
-      "position": [250, 300],
-      "webhookId": "dify-webhook"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=http://localhost:3000/api/workflows/execute",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "inputs",
-              "value": "={{ $json.payload }}"
-            }
-          ]
-        }
-      },
-      "id": "call-dify-api",
-      "name": "Call Dify API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [450, 300]
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "workflow_id",
-              "name": "workflow_id",
-              "type": "string",
-              "value": "={{ $json.data.workflow_id }}"
-            },
-            {
-              "id": "execution_status",
-              "name": "execution_status",
-              "type": "string",
-              "value": "={{ $json.data.status }}"
-            },
-            {
-              "id": "outputs",
-              "name": "outputs",
-              "type": "object",
-              "value": "={{ $json.data.outputs }}"
-            }
-          ]
-        }
-      },
-      "id": "transform-response",
-      "name": "Transform Response",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
-      "position": [650, 300]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "id": "condition_1",
-              "name": "Check Status",
-              "type": "string",
-              "operator": {
-                "name": "filter.operator.equals",
-                "type": "string",
-                "value": "equals"
-              },
-              "value": "completed",
-              "leftValue": "={{ $json.execution_status }}"
-            }
-          ]
-        }
-      },
-      "id": "check-execution-status",
-      "name": "Check Execution Status",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [850, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=http://localhost:3000/api/logs/save",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "workflow_id",
-              "value": "={{ $json.workflow_id }}"
-            },
-            {
-              "name": "status",
-              "value": "={{ $json.execution_status }}"
-            },
-            {
-              "name": "outputs",
-              "value": "={{ $json.outputs }}"
-            },
-            {
-              "name": "timestamp",
-              "value": "={{ new Date().toISOString() }}"
-            }
-          ]
-        }
-      },
-      "id": "log-workflow-execution",
-      "name": "Log Workflow Execution",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1050, 200]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=http://localhost:3000/api/error-handler",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.DIFY_API_KEY }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "error",
-              "value": "={{ $json.execution_status }}"
-            },
-            {
-              "name": "workflow_id",
-              "value": "={{ $json.workflow_id }}"
-            }
-          ]
-        }
-      },
-      "id": "handle-execution-error",
-      "name": "Handle Execution Error",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1050, 400]
-    },
-    {
-      "parameters": {
-        "respondWithData": true
-      },
-      "id": "webhook-response-success",
-      "name": "Webhook Response Success",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1250, 200]
-    },
-    {
-      "parameters": {
-        "respondWithData": true
-      },
-      "id": "webhook-response-error",
-      "name": "Webhook Response Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1250, 400]
+      "position": [
+        1450,
+        300
+      ]
     }
   ],
   "connections": {
-    "webhook-trigger": {
+    "Schedule Trigger": {
       "main": [
         [
           {
-            "node": "call-dify-api",
-            "type": "main",
-            "index": 0
+            "node": "Parse Dify Configuration",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "call-dify-api": {
+    "Parse Dify Configuration": {
       "main": [
         [
           {
-            "node": "transform-response",
-            "type": "main",
-            "index": 0
+            "node": "Extract Automation Logic",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "transform-response": {
+    "Extract Automation Logic": {
       "main": [
         [
           {
-            "node": "check-execution-status",
-            "type": "main",
-            "index": 0
+            "node": "Query Dify API - Workflows",
+            "indices": [
+              0
+            ]
+          },
+          {
+            "node": "Query Dify API - Apps",
+            "indices": [
+              0
+            ]
+          },
+          {
+            "node": "Query Dify API - Messages",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "check-execution-status": {
+    "Query Dify API - Workflows": {
       "main": [
         [
           {
-            "node": "log-workflow-execution",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "handle-execution-error",
-            "type": "main",
-            "index": 0
+            "node": "Transform API Responses",
+            "indices": [
+              0
+            ]
           }
         ]
       ]
     },
-    "log-workflow-execution": {
+    "Query Dify API - Apps": {
       "main": [
         [
           {
-            "node": "webhook-response-success",
-            "type": "main",
-            "index": 0
+            "node": "Transform API Responses",
+            "indices": [
+              1
+            ]
           }
         ]
       ]
     },
-    "handle-execution-error": {
+    "Query Dify API - Messages": {
       "main": [
         [
           {
-            "node": "webhook-response-error",
-            "type": "main",
-            "index": 0
+            "node": "Transform API Responses",
+            "indices": [
+              2
+            ]
+          }
+        ]
+      ]
+    },
+    "Transform API Responses": {
+      "main": [
+        [
+          {
+            "node": "Generate Observability Config",
+            "indices": [
+              0
+            ]
+          },
+          {
+            "node": "Generate Automation Summary",
+            "indices": [
+              0
+            ]
+          }
+        ]
+      ]
+    },
+    "Generate Observability Config": {
+      "main": [
+        [
+          {
+            "node": "Stop",
+            "indices": [
+              0
+            ]
+          }
+        ]
+      ]
+    },
+    "Generate Automation Summary": {
+      "main": [
+        [
+          {
+            "node": "Stop",
+            "indices": [
+              0
+            ]
           }
         ]
       ]

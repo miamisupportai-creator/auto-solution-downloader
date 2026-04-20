@@ -1,19 +1,15 @@
 {
-  "name": "Khoj Content Sync Workflow",
+  "name": "Khoj File Sync Automation",
   "nodes": [
     {
       "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "everyX",
-            "value": 10,
-            "unit": "minutes"
-          }
-        ]
+        "triggerType": "interval",
+        "unit": "minutes",
+        "value": 10
       },
       "id": "trigger_sync",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
+      "name": "Trigger Sync Timer",
+      "type": "n8n-nodes-base.interval",
       "typeVersion": 1,
       "position": [
         250,
@@ -22,124 +18,160 @@
     },
     {
       "parameters": {
-        "functionCode": "const filesToIndex = $input.all();\nreturn filesToIndex;"
+        "functionCode": "const khojToken = $env.KHOJ_TOKEN || '';\nconst hostURL = $env.KHOJ_HOST_URL || 'https://app.khoj.dev';\nconst lastSync = $env.LAST_SYNC ? JSON.parse($env.LAST_SYNC) : [];\nconst filePaths = $env.FILE_PATHS ? JSON.parse($env.FILE_PATHS) : [];\nconst folderPaths = $env.FOLDER_PATHS ? JSON.parse($env.FOLDER_PATHS) : [];\n\nreturn {\n  khojToken,\n  hostURL,\n  lastSync,\n  filePaths,\n  folderPaths,\n  regenerate: false\n};"
+      },
+      "id": "load_config",
+      "name": "Load Configuration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const filePaths = $input.all()[0].json.filePaths || [];\nconst folderPaths = $input.all()[0].json.folderPaths || [];\nconst lastSync = $input.all()[0].json.lastSync || [];\n\nlet filesToSync = [];\n\nfor (const filePath of filePaths) {\n  const lastSyncEntry = lastSync.find(s => s.path === filePath);\n  if (!lastSyncEntry) {\n    filesToSync.push({ path: filePath, type: 'file' });\n  }\n}\n\nfor (const folderPath of folderPaths) {\n  filesToSync.push({ path: folderPath, type: 'folder' });\n}\n\nreturn { filesToSync, lastSync };"
       },
       "id": "collect_files",
       "name": "Collect Files to Sync",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        450,
+        650,
         300
-      ],
-      "dependsOn": [
-        "trigger_sync"
       ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "{{ $env.KHOJ_HOST_URL }}/api/v1/user",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth",
-        "options": {
-          "headers": {
-            "Authorization": "Bearer {{ $env.KHOJ_API_TOKEN }}"
-          }
-        }
+        "functionCode": "const filesToSync = $input.all()[0].json.filesToSync || [];\nconst khojToken = $input.all()[1].json.khojToken;\nconst hostURL = $input.all()[1].json.hostURL;\n\nif (!khojToken || !hostURL) {\n  return { error: 'Missing khoj token or host URL', skip: true };\n}\n\nif (filesToSync.length === 0) {\n  return { skip: true, message: 'No files to sync' };\n}\n\nreturn {\n  filesToSync,\n  khojToken,\n  hostURL,\n  syncUrl: `${hostURL}/api/content?client=automation`\n};"
       },
-      "id": "validate_auth",
-      "name": "Validate Authentication",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
+      "id": "validate_sync",
+      "name": "Validate Sync Requirements",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        650,
+        850,
         300
-      ],
-      "dependsOn": [
-        "collect_files"
       ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "{{ $env.KHOJ_HOST_URL }}/api/content",
-        "authentication": "bearerToken",
+        "url": "={{ $json.syncUrl }}",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
         "sendBody": true,
-        "bodyParametersUi": "keyvaluepairs",
         "bodyParameters": {
+          "parameters": []
+        },
+        "headers": {
           "parameters": [
             {
-              "name": "client",
-              "value": "workflow"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.khojToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
             }
           ]
-        },
-        "options": {
-          "headers": {
-            "Authorization": "Bearer {{ $env.KHOJ_API_TOKEN }}"
-          }
         }
       },
-      "id": "sync_content",
-      "name": "Sync Content to Khoj",
+      "id": "push_to_khoj",
+      "name": "Push Files to Khoj",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        850,
-        300
-      ],
-      "dependsOn": [
-        "validate_auth"
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const syncResult = $input.all()[0];\nif (syncResult.statusCode === 200) {\n  return { success: true, synced_files: syncResult.data };\n} else {\n  return { success: false, error: syncResult.statusMessage };\n}"
-      },
-      "id": "process_result",
-      "name": "Process Sync Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         1050,
         300
-      ],
-      "dependsOn": [
-        "sync_content"
       ]
     },
     {
       "parameters": {
-        "errorMessage": "Sync failed: {{ $json.error }}",
-        "fallbackOutput": true
+        "functionCode": "const response = $input.all()[0].json;\nconst filesToSync = $input.all()[1].json.filesToSync || [];\nconst currentTime = new Date().toISOString();\n\nconst lastSync = filesToSync.map(file => ({\n  path: file.path,\n  datetime: currentTime\n}));\n\nreturn {\n  success: true,\n  lastSync,\n  syncedCount: filesToSync.length,\n  timestamp: currentTime\n};"
       },
-      "id": "error_handler",
-      "name": "Error Handler",
-      "type": "n8n-nodes-base.errorTrigger",
-      "typeVersion": 1,
-      "position": [
-        850,
-        450
-      ],
-      "dependsOn": [
-        "sync_content"
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "const lastSync = new Date().toISOString();\nreturn { lastSync, status: 'completed' };"
-      },
-      "id": "update_state",
-      "name": "Update Last Sync Time",
+      "id": "update_sync_state",
+      "name": "Update Sync State",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1250,
         300
-      ],
-      "dependsOn": [
-        "process_result"
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $input.all()[0].json;\nreturn {\n  completed: result.success,\n  error: result.error || null,\n  syncedFiles: result.syncedCount || 0,\n  lastSync: result.lastSync || []\n};"
+      },
+      "id": "final_state",
+      "name": "Final Sync State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.hostURL }}/api/v1/user?client=automation",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": "httpHeaderAuth",
+        "headers": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.khojToken }}"
+            }
+          ]
+        }
+      },
+      "id": "get_user_info",
+      "name": "Get User Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1050,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "={{ $json.skip }}",
+            "operator": {
+              "name": "filter.operator.equals",
+              "type": "boolean",
+              "description": "Boolean equals"
+            },
+            "rightValue": true
+          }
+        }
+      },
+      "id": "check_skip",
+      "name": "Check if Skip",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        950,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const khojToken = $input.all()[0].json.khojToken;\nconst hostURL = $input.all()[0].json.hostURL;\nconst filesToPush = $input.all()[0].json.filesToSync || [];\nconst regenerate = $input.all()[0].json.regenerate || false;\n\nif (!khojToken || filesToPush.length === 0) {\n  return { error: 'Missing token or files', statusCode: 400 };\n}\n\nconst method = regenerate ? 'PUT' : 'PATCH';\n\nreturn {\n  method,\n  url: `${hostURL}/api/content?client=desktop`,\n  headers: {\n    'Authorization': `Bearer ${khojToken}`\n  },\n  files: filesToPush\n};"
+      },
+      "id": "prepare_request",
+      "name": "Prepare HTTP Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        450
       ]
     }
   ],
@@ -148,9 +180,18 @@
       "main": [
         [
           {
+            "node": "load_config",
+            "indices": [0]
+          }
+        ]
+      ]
+    },
+    "load_config": {
+      "main": [
+        [
+          {
             "node": "collect_files",
-            "type": "main",
-            "index": 0
+            "indices": [0]
           }
         ]
       ]
@@ -159,57 +200,64 @@
       "main": [
         [
           {
-            "node": "validate_auth",
-            "type": "main",
-            "index": 0
+            "node": "validate_sync",
+            "indices": [0]
           }
         ]
       ]
     },
-    "validate_auth": {
+    "validate_sync": {
       "main": [
         [
           {
-            "node": "sync_content",
-            "type": "main",
-            "index": 0
+            "node": "check_skip",
+            "indices": [0]
           }
         ]
       ]
     },
-    "sync_content": {
+    "check_skip": {
       "main": [
         [
           {
-            "node": "process_result",
-            "type": "main",
-            "index": 0
+            "node": "push_to_khoj",
+            "indices": [0]
           }
         ]
       ]
     },
-    "process_result": {
+    "push_to_khoj": {
       "main": [
         [
           {
-            "node": "update_state",
-            "type": "main",
-            "index": 0
+            "node": "update_sync_state",
+            "indices": [0]
+          }
+        ]
+      ]
+    },
+    "update_sync_state": {
+      "main": [
+        [
+          {
+            "node": "final_state",
+            "indices": [0]
+          }
+        ]
+      ]
+    },
+    "load_config": {
+      "main": [
+        [
+          {
+            "node": "get_user_info",
+            "indices": [0]
           }
         ]
       ]
     }
   },
-  "active": true,
   "settings": {
-    "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "callerPolicy": "any"
-  },
-  "staticData": null,
-  "tags": [
-    "khoj",
-    "sync",
-    "content-indexing"
-  ]
+    "executionOrder": "v1"
+  }
 }

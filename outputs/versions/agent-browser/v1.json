@@ -1,322 +1,439 @@
 {
-  "name": "agent-browser Benchmark & Release Automation",
+  "name": "agent-browser Benchmark & Evaluation Workflow",
   "nodes": [
     {
       "parameters": {
         "triggerTimes": {
           "item": [
             {
-              "mode": "everyDay",
-              "hour": 2,
-              "minute": 0
+              "mode": "everyX",
+              "value": 1,
+              "unit": "week"
             }
           ]
         }
       },
-      "id": "trigger-schedule",
+      "id": "trigger",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1,
-      "position": [50, 100]
+      "typeVersion": 1.2,
+      "position": [
+        50,
+        250
+      ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
+        "content": "={\n  \"iterations\": 10,\n  \"warmup\": 1,\n  \"branch\": \"ctate/native-2\",\n  \"vcpus\": 8,\n  \"json\": true,\n  \"vercel_token\": $env.SANDBOX_VERCEL_TOKEN,\n  \"vercel_team_id\": $env.SANDBOX_VERCEL_TEAM_ID,\n  \"vercel_project_id\": $env.SANDBOX_VERCEL_PROJECT_ID\n}",
+        "mode": "runOnceForAllItems"
       },
-      "id": "check-latest-release",
-      "name": "Check Latest Release",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [250, 100]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://registry.npmjs.org/agent-browser"
-      },
-      "id": "check-npm-version",
-      "name": "Check NPM Version",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [450, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const npmData = $input.all();\nconst npmVersion = npmData[0].json['dist-tags'].latest;\nconst latestRelease = $input.all()[1].json;\nconst releaseVersion = latestRelease.tag_name.replace('v', '');\n\nreturn {\n  npmVersion,\n  releaseVersion,\n  needsUpdate: npmVersion !== releaseVersion,\n  needsGithubRelease: latestRelease.assets.length === 0\n};"
-      },
-      "id": "compare-versions",
-      "name": "Compare Versions",
+      "id": "config_node",
+      "name": "Load Benchmark Config",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 100]
+      "position": [
+        250,
+        250
+      ]
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
+        "url": "=https://api.vercel.com/v1/sandbox/create",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
             {
-              "value1": "={{ $json.needsUpdate }}",
-              "operation": "equals",
-              "value2": true
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"teamId\": \"{{ $json.vercel_team_id }}\",\n  \"projectId\": \"{{ $json.vercel_project_id }}\",\n  \"timeout\": 1800000,\n  \"runtime\": \"node22\",\n  \"networkPolicy\": \"allow-all\",\n  \"resources\": {\n    \"vcpus\": {{ $json.vcpus }}\n  }\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "create_sandbox",
+      "name": "Create Vercel Sandbox",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={\n  \"sandboxId\": $json.sandboxId,\n  \"token\": $json.token,\n  \"iterations\": $parent.json.iterations,\n  \"warmup\": $parent.json.warmup,\n  \"branch\": $parent.json.branch\n}",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "extract_sandbox_info",
+      "name": "Extract Sandbox Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/exec",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"command\": \"sudo dnf clean all && sudo dnf install -y nss nspr libxkbcommon atk at-spi2-atk at-spi2-core libXcomposite libXdamage libXrandr libXfixes libXcursor libXi libXtst libXScrnSaver libXext mesa-libgbm libdrm mesa-libGL mesa-libEGL cups-libs alsa-lib pango cairo gtk3 dbus-libs\"\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "install_deps",
+      "name": "Install Chromium Dependencies",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        850,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/exec",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"command\": \"npm install -g agent-browser && npx agent-browser install\"\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "install_node_daemon",
+      "name": "Install Node.js Daemon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1050,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/exec",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"command\": \"source $HOME/.cargo/env && cd /tmp/agent-browser && cargo build --release\"\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "build_native_daemon",
+      "name": "Build Native Daemon",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1050,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={\n  \"nodeLatencies\": [],\n  \"nativeLatencies\": [],\n  \"nodeMetrics\": {},\n  \"nativeMetrics\": {}\n}",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "init_results",
+      "name": "Initialize Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/exec",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"command\": \"AGENT_BROWSER_SESSION=bench-node agent-browser open about:blank && AGENT_BROWSER_SESSION=bench-node agent-browser snapshot && AGENT_BROWSER_SESSION=bench-node agent-browser screenshot && AGENT_BROWSER_SESSION=bench-node agent-browser close\"\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "run_node_scenarios",
+      "name": "Run Node.js Daemon Scenarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/exec",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": "={\n  \"command\": \"AGENT_BROWSER_SESSION=bench-native /tmp/agent-browser/cli/target/release/agent-browser open about:blank && AGENT_BROWSER_SESSION=bench-native /tmp/agent-browser/cli/target/release/agent-browser snapshot && AGENT_BROWSER_SESSION=bench-native /tmp/agent-browser/cli/target/release/agent-browser screenshot && AGENT_BROWSER_SESSION=bench-native /tmp/agent-browser/cli/target/release/agent-browser close\"\n}",
+        "bodyContentType": "application/json"
+      },
+      "id": "run_native_scenarios",
+      "name": "Run Native Daemon Scenarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "={\n  \"comparison\": {\n    \"nodeResults\": $nodes[\"run_node_scenarios\"].json,\n    \"nativeResults\": $nodes[\"run_native_scenarios\"].json,\n    \"timestamp\": new Date().toISOString(),\n    \"config\": {\n      \"iterations\": $parent.json.iterations,\n      \"warmup\": $parent.json.warmup,\n      \"branch\": $parent.json.branch,\n      \"vcpus\": $parent.json.vcpus\n    }\n  }\n}",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "compile_results",
+      "name": "Compile Comparison Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.vercel.com/v1/sandbox/{{ $json.sandboxId }}/stop",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SANDBOX_VERCEL_TOKEN }}"
             }
           ]
         }
       },
-      "id": "decide-publish",
-      "name": "Should Publish?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [850, 100]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
-      },
-      "id": "get-repo-info",
-      "name": "Get Repository Info",
+      "id": "cleanup_sandbox",
+      "name": "Stop Sandbox",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1050, 50]
+      "position": [
+        1850,
+        250
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/release.yml/dispatches",
-        "body": "{\n  \"ref\": \"main\"\n}",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
+        "httpMethod": "POST",
+        "path": "benchmark-results",
+        "responseMode": "onReceived",
+        "responseData": "{\n  \"status\": \"received\",\n  \"timestamp\": \"{{ now() }}\"\n}",
+        "bodyParametersJson": "={\n  \"comparison\": $json.comparison\n}"
       },
-      "id": "trigger-release-workflow",
-      "name": "Trigger Release Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1050, 150]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/runs?event=workflow_dispatch&status=in_progress",
-        "authentication": "genericCredentialType",
-        "genericCredentialType": "httpHeaderAuth"
-      },
-      "id": "poll-workflow-status",
-      "name": "Poll Workflow Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1250, 150]
-    },
-    {
-      "parameters": {
-        "functionCode": "const runs = $input.all()[0].json.workflow_runs;\nif (!runs || runs.length === 0) {\n  return { status: 'pending', message: 'Workflow not yet started' };\n}\n\nconst latestRun = runs[0];\nreturn {\n  status: latestRun.status,\n  conclusion: latestRun.conclusion,\n  url: latestRun.html_url,\n  isComplete: latestRun.status === 'completed'\n};"
-      },
-      "id": "parse-workflow-status",
-      "name": "Parse Workflow Status",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1450, 150]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.isComplete }}",
-              "operation": "equals",
-              "value2": false
-            }
-          ]
-        }
-      },
-      "id": "check-workflow-complete",
-      "name": "Workflow Complete?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1650, 150]
-    },
-    {
-      "parameters": {
-        "delayType": "seconds",
-        "secondsToWait": 30
-      },
-      "id": "wait-for-workflow",
-      "name": "Wait 30 Seconds",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1,
-      "position": [1850, 150]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
-        "body": "{\n  \"text\": \"agent-browser Release Complete\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"✅ *agent-browser v{{ $json.npmVersion }}* published to npm\\n*Binaries:* 7 platforms built and released\"\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": {\n            \"type\": \"plain_text\",\n            \"text\": \"View Release\"\n          },\n          \"url\": \"https://github.com/vercel-labs/agent-browser/releases/latest\"\n        }\n      ]\n    }\n  ]\n}"
-      },
-      "id": "notify-release-success",
-      "name": "Notify Release Success",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2050, 100]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
-        "body": "{\n  \"text\": \"⚠️ agent-browser Release Failed\",\n  \"attachments\": [\n    {\n      \"color\": \"danger\",\n      \"text\": \"Workflow status: {{ $json.conclusion }}\\nCheck: {{ $json.url }}\"\n    }\n  ]\n}"
-      },
-      "id": "notify-release-failure",
-      "name": "Notify Release Failure",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2050, 200]
+      "id": "webhook_output",
+      "name": "Webhook Output",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        2050,
+        250
+      ]
     }
   ],
   "connections": {
-    "trigger-schedule": {
+    "trigger": {
       "main": [
         [
           {
-            "node": "check-latest-release",
+            "node": "config_node",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-latest-release": {
+    "config_node": {
       "main": [
         [
           {
-            "node": "check-npm-version",
+            "node": "create_sandbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-npm-version": {
+    "create_sandbox": {
       "main": [
         [
           {
-            "node": "compare-versions",
+            "node": "extract_sandbox_info",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "compare-versions": {
+    "extract_sandbox_info": {
       "main": [
         [
           {
-            "node": "decide-publish",
+            "node": "install_deps",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "decide-publish": {
+    "install_deps": {
       "main": [
         [
           {
-            "node": "get-repo-info",
+            "node": "install_node_daemon",
             "type": "main",
             "index": 0
           },
           {
-            "node": "trigger-release-workflow",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
-    "trigger-release-workflow": {
-      "main": [
-        [
-          {
-            "node": "poll-workflow-status",
+            "node": "build_native_daemon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "poll-workflow-status": {
+    "install_node_daemon": {
       "main": [
         [
           {
-            "node": "parse-workflow-status",
+            "node": "init_results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "parse-workflow-status": {
+    "build_native_daemon": {
       "main": [
         [
           {
-            "node": "check-workflow-complete",
+            "node": "init_results",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-workflow-complete": {
+    "init_results": {
       "main": [
         [
           {
-            "node": "wait-for-workflow",
+            "node": "run_node_scenarios",
             "type": "main",
             "index": 0
-          }
-        ],
-        [
+          },
           {
-            "node": "notify-release-success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "wait-for-workflow": {
-      "main": [
-        [
-          {
-            "node": "poll-workflow-status",
+            "node": "run_native_scenarios",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "notify-release-success": {
+    "run_node_scenarios": {
       "main": [
-        []
+        [
+          {
+            "node": "compile_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "notify-release-failure": {
+    "run_native_scenarios": {
       "main": [
-        []
+        [
+          {
+            "node": "compile_results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compile_results": {
+      "main": [
+        [
+          {
+            "node": "cleanup_sandbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cleanup_sandbox": {
+      "main": [
+        [
+          {
+            "node": "webhook_output",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
-  "active": true,
   "settings": {
-    "errorWorkflow": "",
-    "saveExecutionProgress": true,
-    "saveManualExecutions": true,
-    "timezone": "UTC"
-  },
-  "staticData": null,
-  "versionId": "1"
+    "executionOrder": "v1"
+  }
 }
