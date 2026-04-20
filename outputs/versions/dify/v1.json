@@ -1,277 +1,315 @@
 {
-  "name": "Dify - LLM Application Development Platform",
+  "name": "Dify LLM Application Development Platform",
   "nodes": [
     {
-      "parameters": {
-        "triggerTimes": [
-          {
-            "mode": "everyMinute"
-          }
-        ]
-      },
-      "id": "Schedule Trigger",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1,
-      "position": [
-        250,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Extract key automation logic from Dify repository\n// System Purpose: LLM app development platform with workflow, RAG, agents, and observability\n// Primary Functions:\n// 1. Workflow orchestration and execution\n// 2. RAG pipeline management\n// 3. Agent capability coordination\n// 4. Model management across providers\n// 5. Observability and tracing (OpenTelemetry, Langfuse, Opik, Arize Phoenix)\n// 6. Application logging and monitoring\n\nreturn {\n  system: 'Dify LLM Platform',\n  capabilities: [\n    'AI Workflow Building',\n    'RAG Pipeline Execution',\n    'Agent Management',\n    'Multi-Model Support (GPT, Mistral, Llama3, etc)',\n    'OpenTelemetry Integration',\n    'Trace Management',\n    'Application Monitoring',\n    'Message Logging',\n    'Dataset Management'\n  ],\n  deployment: {\n    containerized: true,\n    docker_compose: true,\n    kubernetes_ready: true,\n    self_hosted: true,\n    cloud: 'https://cloud.dify.ai'\n  },\n  core_services: [\n    'API Backend',\n    'Web Frontend',\n    'PostgreSQL Database',\n    'Redis Cache',\n    'Vector Database (Weaviate/Milvus/etc)',\n    'Celery Worker',\n    'Scheduler (Beat)'\n  ]\n};"
-      },
-      "id": "Parse Dify Configuration",
-      "name": "Parse Dify Configuration",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        450,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Extract automation workflows from Dify documentation\n// Key Automations Identified:\n\nconst automations = {\n  workflow_execution: {\n    description: 'Execute AI workflows on visual canvas',\n    inputs: ['workflow_config', 'input_data'],\n    outputs: ['execution_result', 'logs'],\n    trigger: 'webhook_or_schedule'\n  },\n  rag_pipeline: {\n    description: 'Document ingestion and retrieval pipeline',\n    steps: [\n      'document_upload',\n      'text_extraction',\n      'embedding_generation',\n      'vector_storage',\n      'semantic_search'\n    ]\n  },\n  agent_execution: {\n    description: 'Agent-based task execution with tools',\n    capabilities: [\n      'llm_function_calling',\n      'react_pattern',\n      'tool_integration',\n      'reasoning_loop'\n    ]\n  },\n  observability: {\n    description: 'Application monitoring and tracing',\n    services: [\n      'OpenTelemetry_export',\n      'Langfuse_integration',\n      'Opik_tracing',\n      'Arize_Phoenix_monitoring'\n    ]\n  },\n  model_management: {\n    description: 'Multi-provider LLM integration',\n    providers: [\n      'OpenAI',\n      'Mistral',\n      'Llama',\n      'Custom_OpenAI_compatible'\n    ]\n  }\n};\n\nreturn automations;"
-      },
-      "id": "Extract Automation Logic",
-      "name": "Extract Automation Logic",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        650,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:3000/api/v1/workflows",
-        "method": "GET",
-        "authentication": "none",
-        "responseFormat": "json"
-      },
-      "id": "Query Dify API - Workflows",
-      "name": "Query Dify API - Workflows",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        850,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:3000/api/v1/apps",
-        "method": "GET",
-        "authentication": "none",
-        "responseFormat": "json"
-      },
-      "id": "Query Dify API - Apps",
-      "name": "Query Dify API - Apps",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        850,
-        350
-      ]
-    },
-    {
-      "parameters": {
-        "url": "http://localhost:3000/api/v1/messages",
-        "method": "GET",
-        "authentication": "none",
-        "responseFormat": "json"
-      },
-      "id": "Query Dify API - Messages",
-      "name": "Query Dify API - Messages",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [
-        850,
-        500
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Process and transform Dify API responses\nconst workflows = $input.all()[0].json;\nconst apps = $input.all()[1].json;\nconst messages = $input.all()[2].json;\n\nconst processed = {\n  total_workflows: workflows?.data?.length || 0,\n  total_apps: apps?.data?.length || 0,\n  total_messages: messages?.data?.length || 0,\n  workflows: workflows?.data || [],\n  apps: apps?.data || [],\n  messages: messages?.data || [],\n  timestamp: new Date().toISOString()\n};\n\nreturn processed;"
-      },
-      "id": "Transform API Responses",
-      "name": "Transform API Responses",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1050,
-        350
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Generate observability trace data structure\nconst traceData = {\n  service_name: 'dify',\n  signals: {\n    traces: {\n      workflow_runs: {\n        span_type: 'dify.workflow.run',\n        includes: ['workflow_id', 'status', 'duration', 'model_calls']\n      },\n      node_execution: {\n        span_type: 'dify.node.execution',\n        includes: ['node_id', 'node_type', 'input', 'output', 'duration']\n      },\n      message_events: {\n        span_type: 'dify.message',\n        includes: ['message_id', 'content', 'tokens', 'cost']\n      }\n    },\n    metrics: {\n      workflow_counter: 'dify.workflow.total',\n      message_counter: 'dify.message.total',\n      token_counter: 'dify.tokens.total',\n      error_counter: 'dify.errors.total'\n    },\n    logs: {\n      structured: true,\n      includes_trace_id: true,\n      includes_span_id: true,\n      content_gating: 'configurable'\n    }\n  },\n  otel_endpoint: process.env.ENTERPRISE_OTLP_ENDPOINT || 'http://localhost:4318',\n  sampling_rate: parseFloat(process.env.ENTERPRISE_OTEL_SAMPLING_RATE || '1.0')\n};\n\nreturn traceData;"
-      },
-      "id": "Generate Observability Config",
-      "name": "Generate Observability Config",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1250,
-        200
-      ]
-    },
-    {
-      "parameters": {
-        "functionCode": "// Aggregate and summarize automation findings\nconst summary = {\n  platform: 'Dify LLM Application Development',\n  automation_patterns: [\n    {\n      name: 'Workflow Orchestration',\n      type: 'Event-driven',\n      trigger: 'User action / Schedule / Webhook',\n      processing: 'Visual workflow execution with node dependencies',\n      output: 'Workflow result + execution logs'\n    },\n    {\n      name: 'RAG Document Pipeline',\n      type: 'Batch Processing',\n      trigger: 'Document upload / Schedule',\n      processing: 'Extract → Embed → Store → Retrieve',\n      output: 'Indexed vectors + retrieval results'\n    },\n    {\n      name: 'Agent Task Execution',\n      type: 'Agentic Loop',\n      trigger: 'User input / API call',\n      processing: 'LLM reasoning + tool invocation + result evaluation',\n      output: 'Agent response + tool call logs'\n    },\n    {\n      name: 'Observability Pipeline',\n      type: 'Continuous Monitoring',\n      trigger: 'Application events',\n      processing: 'Span generation → Log correlation → Metric aggregation',\n      output: 'OpenTelemetry signals → OTLP export'\n    }\n  ],\n  deployment_architectures: [\n    'Docker Compose (local)',\n    'Kubernetes (HA)',\n    'AWS / Azure / GCP (managed)'\n  ],\n  key_integrations: [\n    '50+ LLM providers',\n    'Vector databases (Weaviate, Milvus, PGVector)',\n    'Observability backends (Langfuse, Opik, Arize Phoenix, OTEL)',\n    'Storage systems (S3, Azure Blob, local)'\n  ],\n  api_endpoints: [\n    '/api/v1/workflows',\n    '/api/v1/apps',\n    '/api/v1/messages',\n    '/api/v1/datasets',\n    '/api/v1/models'\n  ]\n};\n\nreturn summary;"
-      },
-      "id": "Generate Automation Summary",
-      "name": "Generate Automation Summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 1,
-      "position": [
-        1250,
-        400
-      ]
-    },
-    {
       "parameters": {},
-      "id": "Stop",
-      "name": "Stop",
-      "type": "n8n-nodes-base.stop",
+      "id": "e6f3b4d2-1a2c-4e5f-9a3b-7c2d8e1f5a9b",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
       "typeVersion": 1,
-      "position": [
-        1450,
-        300
-      ]
+      "position": [50, 50]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/workflows"
+      },
+      "id": "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6",
+      "name": "Fetch Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 50]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/models"
+      },
+      "id": "b2c3d4e5-f6a7-48b9-c0d1-e2f3a4b5c6d7",
+      "name": "Fetch Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 150]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/rag-pipelines"
+      },
+      "id": "c3d4e5f6-a7b8-49ca-d1e2-f3a4b5c6d7e8",
+      "name": "Fetch RAG Pipelines",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 250]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/agents"
+      },
+      "id": "d4e5f6a7-b8c9-4adb-e2f3-a4b5c6d7e8f9",
+      "name": "Fetch Agents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 350]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/apps"
+      },
+      "id": "e5f6a7b8-c9da-4bec-f3a4-b5c6d7e8f9a0",
+      "name": "Fetch Applications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 450]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.dify.ai/v1/observability/metrics"
+      },
+      "id": "f6a7b8c9-daeb-4cfd-a4b5-c6d7e8f9a0b1",
+      "name": "Fetch Observability Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [250, 550]
+    },
+    {
+      "parameters": {
+        "mappings": {
+          "workflows": "{{ $node[\"Fetch Workflows\"].json }}",
+          "models": "{{ $node[\"Fetch Models\"].json }}",
+          "rag_pipelines": "{{ $node[\"Fetch RAG Pipelines\"].json }}",
+          "agents": "{{ $node[\"Fetch Agents\"].json }}",
+          "applications": "{{ $node[\"Fetch Applications\"].json }}",
+          "metrics": "{{ $node[\"Fetch Observability Metrics\"].json }}"
+        }
+      },
+      "id": "a7b8c9da-ebfc-4d0e-b5c6-d7e8f9a0b1c2",
+      "name": "Aggregate Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [450, 250]
+    },
+    {
+      "parameters": {
+        "code": "const workflows = $input.all()[0].json.workflows || [];\nconst models = $input.all()[0].json.models || [];\nconst agents = $input.all()[0].json.agents || [];\nconst apps = $input.all()[0].json.applications || [];\nconst metrics = $input.all()[0].json.metrics || [];\n\nreturn {\n  summary: {\n    total_workflows: Array.isArray(workflows) ? workflows.length : 0,\n    total_models: Array.isArray(models) ? models.length : 0,\n    total_agents: Array.isArray(agents) ? agents.length : 0,\n    total_applications: Array.isArray(apps) ? apps.length : 0,\n    observability_enabled: metrics.length > 0\n  },\n  platform_status: 'operational',\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "b8c9daeb-fcad-4e0f-c6d7-e8f9a0b1c2d3",
+      "name": "Process Platform Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.dify.ai/v1/logs/ingest",
+        "body": "{{ $json }}"
+      },
+      "id": "c9daebfc-ad0e-4f0f-d7e8-f9a0b1c2d3e4",
+      "name": "Log Platform State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 250]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "key": "{{ $json.platform_status }}",
+              "condition": "equals",
+              "value": "operational"
+            }
+          ]
+        }
+      },
+      "id": "daebfcad-0e1f-5010-e8f9-a0b1c2d3e4f5",
+      "name": "Status Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{{ $json }}"
+      },
+      "id": "ebfcad0e-1f2f-5110-f9a0-b1c2d3e4f5a6",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 150]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{{ { error: 'Platform check failed', status: $json.platform_status } }}"
+      },
+      "id": "fcad0e1f-2f3f-5210-a0b1-c2d3e4f5a6b7",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 350]
     }
   ],
   "connections": {
-    "Schedule Trigger": {
+    "Start": {
       "main": [
         [
           {
-            "node": "Parse Dify Configuration",
-            "indices": [
-              0
-            ]
-          }
-        ]
-      ]
-    },
-    "Parse Dify Configuration": {
-      "main": [
-        [
-          {
-            "node": "Extract Automation Logic",
-            "indices": [
-              0
-            ]
-          }
-        ]
-      ]
-    },
-    "Extract Automation Logic": {
-      "main": [
-        [
-          {
-            "node": "Query Dify API - Workflows",
-            "indices": [
-              0
-            ]
+            "node": "Fetch Workflows",
+            "type": "main",
+            "index": 0
           },
           {
-            "node": "Query Dify API - Apps",
-            "indices": [
-              0
-            ]
+            "node": "Fetch Models",
+            "type": "main",
+            "index": 0
           },
           {
-            "node": "Query Dify API - Messages",
-            "indices": [
-              0
-            ]
-          }
-        ]
-      ]
-    },
-    "Query Dify API - Workflows": {
-      "main": [
-        [
-          {
-            "node": "Transform API Responses",
-            "indices": [
-              0
-            ]
-          }
-        ]
-      ]
-    },
-    "Query Dify API - Apps": {
-      "main": [
-        [
-          {
-            "node": "Transform API Responses",
-            "indices": [
-              1
-            ]
-          }
-        ]
-      ]
-    },
-    "Query Dify API - Messages": {
-      "main": [
-        [
-          {
-            "node": "Transform API Responses",
-            "indices": [
-              2
-            ]
-          }
-        ]
-      ]
-    },
-    "Transform API Responses": {
-      "main": [
-        [
-          {
-            "node": "Generate Observability Config",
-            "indices": [
-              0
-            ]
+            "node": "Fetch RAG Pipelines",
+            "type": "main",
+            "index": 0
           },
           {
-            "node": "Generate Automation Summary",
-            "indices": [
-              0
-            ]
+            "node": "Fetch Agents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Applications",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Observability Metrics",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
-    "Generate Observability Config": {
+    "Fetch Workflows": {
       "main": [
         [
           {
-            "node": "Stop",
-            "indices": [
-              0
-            ]
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
-    "Generate Automation Summary": {
+    "Fetch Models": {
       "main": [
         [
           {
-            "node": "Stop",
-            "indices": [
-              0
-            ]
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RAG Pipelines": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Agents": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Applications": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Observability Metrics": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Data": {
+      "main": [
+        [
+          {
+            "node": "Process Platform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Platform Data": {
+      "main": [
+        [
+          {
+            "node": "Log Platform State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Platform State": {
+      "main": [
+        [
+          {
+            "node": "Status Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Check": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     }
   },
-  "active": true,
   "settings": {
     "executionOrder": "v1"
   }
