@@ -1,308 +1,295 @@
 {
-  "name": "Dify LLM Application Development Platform",
+  "name": "Dify LLM Application Platform Automation",
   "nodes": [
     {
-      "parameters": {},
-      "id": "e6f3b4d2-1a2c-4e5f-9a3b-7c2d8e1f5a9b",
-      "name": "Start",
-      "type": "n8n-nodes-base.start",
+      "parameters": {
+        "trigger": "manual"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [50, 50]
+      "position": [50, 100]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/workflows"
+        "httpMethod": "POST",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/workflows/run",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"inputs\": {{$json.body}},\n  \"response_mode\": \"blocking\"\n}",
+        "options": {}
       },
-      "id": "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6",
-      "name": "Fetch Workflows",
+      "name": "Execute Dify Workflow",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [250, 50]
+      "typeVersion": 4.1,
+      "position": [250, 100]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/models"
+        "assignments": [
+          {
+            "id": "workflow_run_id",
+            "name": "workflow_run_id",
+            "type": "string",
+            "value": "={{$json.data.workflow_run_id}}"
+          },
+          {
+            "id": "workflow_output",
+            "name": "workflow_output",
+            "type": "string",
+            "value": "={{$json.data.outputs}}"
+          },
+          {
+            "id": "workflow_status",
+            "name": "workflow_status",
+            "type": "string",
+            "value": "={{$json.data.status}}"
+          }
+        ]
       },
-      "id": "b2c3d4e5-f6a7-48b9-c0d1-e2f3a4b5c6d7",
-      "name": "Fetch Models",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [250, 150]
+      "name": "Process Workflow Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [450, 100]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/rag-pipelines"
+        "httpMethod": "GET",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/workflows/{{$json.workflow_run_id}}/logs",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "c3d4e5f6-a7b8-49ca-d1e2-f3a4b5c6d7e8",
-      "name": "Fetch RAG Pipelines",
+      "name": "Retrieve Workflow Logs",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
+      "position": [650, 100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "code": "// Parse and structure workflow logs\nconst logs = $json.data?.logs || [];\nconst structuredLogs = logs.map(log => ({\n  timestamp: log.created_at,\n  level: log.level,\n  message: log.message,\n  node_id: log.node_id,\n  step: log.step\n}));\n\nreturn {\n  total_logs: structuredLogs.length,\n  logs: structuredLogs,\n  workflow_id: $json.workflow_id,\n  duration_ms: $json.duration\n};"
+      },
+      "name": "Format Logs Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/datasets/documents/create",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"dataset_id\": \"{{$json.dataset_id}}\",\n  \"document\": {\n    \"content\": {{$json.document_content}},\n    \"metadata\": {\n      \"source\": \"n8n_automation\",\n      \"created_at\": \"{{$now.toIso()}}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "name": "Create Dataset Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [250, 250]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/agents"
+        "httpMethod": "GET",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/apps",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "d4e5f6a7-b8c9-4adb-e2f3-a4b5c6d7e8f9",
-      "name": "Fetch Agents",
+      "name": "List All Applications",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [250, 350]
+      "typeVersion": 4.1,
+      "position": [250, 400]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/apps"
+        "mode": "runOnceForAllItems",
+        "code": "// Filter and format application list\nconst apps = $json.data?.items || [];\nconst formattedApps = apps.map(app => ({\n  id: app.id,\n  name: app.name,\n  type: app.mode,\n  created_at: app.created_at,\n  updated_at: app.updated_at,\n  icon: app.icon\n}));\n\nreturn {\n  total_applications: formattedApps.length,\n  applications: formattedApps\n};"
       },
-      "id": "e5f6a7b8-c9da-4bec-f3a4-b5c6d7e8f9a0",
-      "name": "Fetch Applications",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [250, 450]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.dify.ai/v1/observability/metrics"
-      },
-      "id": "f6a7b8c9-daeb-4cfd-a4b5-c6d7e8f9a0b1",
-      "name": "Fetch Observability Metrics",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [250, 550]
-    },
-    {
-      "parameters": {
-        "mappings": {
-          "workflows": "{{ $node[\"Fetch Workflows\"].json }}",
-          "models": "{{ $node[\"Fetch Models\"].json }}",
-          "rag_pipelines": "{{ $node[\"Fetch RAG Pipelines\"].json }}",
-          "agents": "{{ $node[\"Fetch Agents\"].json }}",
-          "applications": "{{ $node[\"Fetch Applications\"].json }}",
-          "metrics": "{{ $node[\"Fetch Observability Metrics\"].json }}"
-        }
-      },
-      "id": "a7b8c9da-ebfc-4d0e-b5c6-d7e8f9a0b1c2",
-      "name": "Aggregate Data",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.5,
-      "position": [450, 250]
-    },
-    {
-      "parameters": {
-        "code": "const workflows = $input.all()[0].json.workflows || [];\nconst models = $input.all()[0].json.models || [];\nconst agents = $input.all()[0].json.agents || [];\nconst apps = $input.all()[0].json.applications || [];\nconst metrics = $input.all()[0].json.metrics || [];\n\nreturn {\n  summary: {\n    total_workflows: Array.isArray(workflows) ? workflows.length : 0,\n    total_models: Array.isArray(models) ? models.length : 0,\n    total_agents: Array.isArray(agents) ? agents.length : 0,\n    total_applications: Array.isArray(apps) ? apps.length : 0,\n    observability_enabled: metrics.length > 0\n  },\n  platform_status: 'operational',\n  timestamp: new Date().toISOString()\n};"
-      },
-      "id": "b8c9daeb-fcad-4e0f-c6d7-e8f9a0b1c2d3",
-      "name": "Process Platform Data",
+      "name": "Format Applications List",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/apps/{{$json.app_id}}/messages",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParametersJson": "{\n  \"inputs\": {{$json.message_inputs}},\n  \"response_mode\": \"streaming\",\n  \"conversation_id\": \"{{$json.conversation_id}}\"\n}",
+        "options": {}
+      },
+      "name": "Send Message to App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [650, 250]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.dify.ai/v1/logs/ingest",
-        "body": "{{ $json }}"
+        "httpMethod": "GET",
+        "url": "=https://{{$env.DIFY_API_URL}}/api/v1/apps/{{$json.app_id}}/conversations",
+        "authentication": "headerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.DIFY_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "c9daebfc-ad0e-4f0f-d7e8-f9a0b1c2d3e4",
-      "name": "Log Platform State",
+      "name": "Get Conversations",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.1,
       "position": [850, 250]
     },
     {
       "parameters": {
-        "conditions": {
-          "conditions": [
-            {
-              "key": "{{ $json.platform_status }}",
-              "condition": "equals",
-              "value": "operational"
-            }
-          ]
-        }
+        "resource": "message",
+        "operation": "send",
+        "text": "Dify Workflow Automation Complete\n\nWorkflow ID: {{$json.workflow_run_id}}\nStatus: {{$json.workflow_status}}\nTotal Logs: {{$json.total_logs}}\n\nOutputs:\n{{$json.workflow_output}}"
       },
-      "id": "daebfcad-0e1f-5010-e8f9-a0b1c2d3e4f5",
-      "name": "Status Check",
-      "type": "n8n-nodes-base.if",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [1050, 100]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "code": "// Error handling and workflow summary\nreturn {\n  execution_status: $input.first()?.workflow_status || 'unknown',\n  total_steps: $input.first()?.total_logs || 0,\n  timestamp: new Date().toISOString(),\n  workflow_summary: {\n    started_at: $input.first()?.created_at,\n    workflow_id: $input.first()?.workflow_run_id\n  }\n};"
+      },
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1050, 250]
-    },
-    {
-      "parameters": {
-        "mode": "raw",
-        "jsonOutput": "{{ $json }}"
-      },
-      "id": "ebfcad0e-1f2f-5110-f9a0-b1c2d3e4f5a6",
-      "name": "Success Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1250, 150]
-    },
-    {
-      "parameters": {
-        "mode": "raw",
-        "jsonOutput": "{{ { error: 'Platform check failed', status: $json.platform_status } }}"
-      },
-      "id": "fcad0e1f-2f3f-5210-a0b1-c2d3e4f5a6b7",
-      "name": "Error Response",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [1250, 350]
     }
   ],
   "connections": {
-    "Start": {
+    "Webhook Trigger": {
       "main": [
         [
           {
-            "node": "Fetch Workflows",
+            "node": "Execute Dify Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Dify Workflow": {
+      "main": [
+        [
+          {
+            "node": "Process Workflow Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Workflow Response": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Workflow Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Workflow Logs": {
+      "main": [
+        [
+          {
+            "node": "Format Logs Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Logs Data": {
+      "main": [
+        [
+          {
+            "node": "Send Notification",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Fetch Models",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch RAG Pipelines",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Agents",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Applications",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Observability Metrics",
+            "node": "Generate Summary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch Workflows": {
+    "List All Applications": {
       "main": [
         [
           {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Models": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch RAG Pipelines": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Agents": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Applications": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Observability Metrics": {
-      "main": [
-        [
-          {
-            "node": "Aggregate Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Aggregate Data": {
-      "main": [
-        [
-          {
-            "node": "Process Platform Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Process Platform Data": {
-      "main": [
-        [
-          {
-            "node": "Log Platform State",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Platform State": {
-      "main": [
-        [
-          {
-            "node": "Status Check",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Status Check": {
-      "main": [
-        [
-          {
-            "node": "Success Response",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Response",
+            "node": "Format Applications List",
             "type": "main",
             "index": 0
           }
@@ -310,6 +297,7 @@
       ]
     }
   },
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }

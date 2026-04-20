@@ -1,13 +1,19 @@
 {
-  "name": "agent-browser CI/Release Automation",
+  "name": "agent-browser CI/CD Automation",
   "nodes": [
     {
       "parameters": {
-        "trigger": "manually"
+        "triggerTimes": [
+          {
+            "mode": "everyDay",
+            "hour": 0,
+            "minute": 0
+          }
+        ]
       },
-      "id": "trigger",
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
+      "id": "trigger_schedule",
+      "name": "Trigger - Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [
         0,
@@ -16,288 +22,393 @@
     },
     {
       "parameters": {
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/contents/package.json",
-        "method": "GET",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth"
+        "method": "POST",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/ci.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "credentialType": "httpHeaderAuth",
+          "authentication": "predefinedCredentialType"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": {
+          "ref": "main"
+        }
       },
-      "id": "fetch_local_version",
-      "name": "Fetch Local Version",
+      "id": "trigger_ci_workflow",
+      "name": "Trigger GitHub CI Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        200,
+        250,
         0
       ],
       "credentials": {
-        "genericHttpHeaderAuth": "github_token"
+        "httpHeaderAuth": {
+          "id": "github_token_auth",
+          "name": "GitHub Token Auth"
+        }
       }
     },
     {
       "parameters": {
-        "url": "https://registry.npmjs.org/agent-browser",
-        "method": "GET"
+        "method": "POST",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/release.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "credentialType": "httpHeaderAuth",
+          "authentication": "predefinedCredentialType"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": {
+          "ref": "main"
+        }
       },
-      "id": "fetch_npm_version",
-      "name": "Fetch NPM Version",
+      "id": "trigger_release_workflow",
+      "name": "Trigger GitHub Release Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        400,
+        500,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github_token_auth",
+          "name": "GitHub Token Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/latest",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "credentialType": "httpHeaderAuth",
+          "authentication": "predefinedCredentialType"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        }
+      },
+      "id": "check_latest_release",
+      "name": "Check Latest GitHub Release",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github_token_auth",
+          "name": "GitHub Token Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://registry.npmjs.org/agent-browser",
+        "authentication": "none"
+      },
+      "id": "check_npm_version",
+      "name": "Check NPM Package Version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
         0
       ]
     },
     {
       "parameters": {
-        "functionCode": "const packageData = JSON.parse(Buffer.from(items[0].json.content, 'base64').toString());\nconst localVersion = packageData.version;\nconst npmVersion = items[1].json['dist-tags']?.latest || '0.0.0';\nreturn [{\n  json: {\n    localVersion,\n    npmVersion,\n    shouldRelease: localVersion !== npmVersion,\n    version: localVersion\n  }\n}];"
+        "functionCode": "const latestTag = $input.first().json?.tag_name?.replace('v', '') || '0.0.0';\nconst npmVersion = $input.first().json?.['dist-tags']?.latest || '0.0.0';\n\nreturn {\n  github_version: latestTag,\n  npm_version: npmVersion,\n  version_match: latestTag === npmVersion,\n  needs_release: latestTag !== npmVersion\n};"
       },
       "id": "compare_versions",
       "name": "Compare Versions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        600,
+        1250,
         0
       ]
     },
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "number": [
             {
-              "value1": "={{ $json.shouldRelease }}",
+              "value1": "={{ $json.needs_release }}",
               "operation": "equals",
               "value2": true
             }
           ]
         }
       },
-      "id": "check_should_release",
-      "name": "Should Release?",
+      "id": "version_mismatch_check",
+      "name": "Version Mismatch Check",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        800,
+        1500,
         0
       ]
     },
     {
       "parameters": {
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases/tags/v{{ $json.version }}",
-        "method": "GET",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "options": {}
+        "method": "POST",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/workflows/release.yml/dispatches",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "credentialType": "httpHeaderAuth",
+          "authentication": "predefinedCredentialType"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "body": {
+          "ref": "main"
+        }
       },
-      "id": "check_github_release",
-      "name": "Check GitHub Release",
+      "id": "trigger_release_on_mismatch",
+      "name": "Trigger Release on Version Mismatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1750,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github_token_auth",
+          "name": "GitHub Token Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/runs?status=failure&limit=10",
+        "authentication": "genericCredentialType",
+        "genericCredentialType": {
+          "credentialType": "httpHeaderAuth",
+          "authentication": "predefinedCredentialType"
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        }
+      },
+      "id": "check_failed_workflows",
+      "name": "Check Failed Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github_token_auth",
+          "name": "GitHub Token Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const runs = $input.first().json?.workflow_runs || [];\n\nif (runs.length === 0) {\n  return { has_failures: false, failure_count: 0 };\n}\n\nconst failures = runs.filter(r => r.status === 'completed' && r.conclusion === 'failure');\n\nreturn {\n  has_failures: failures.length > 0,\n  failure_count: failures.length,\n  recent_failures: failures.slice(0, 3).map(f => ({\n    name: f.name,\n    run_id: f.id,\n    url: f.html_url,\n    created_at: f.created_at\n  }))\n};"
+      },
+      "id": "analyze_failures",
+      "name": "Analyze Failed Workflows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.has_failures }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "failure_notification_check",
+      "name": "Failure Notification Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "body": {
+          "text": "⚠️ agent-browser CI Failures Detected",
+          "blocks": [
+            {
+              "type": "section",
+              "text": {
+                "type": "mrkdwn",
+                "text": "*agent-browser CI/CD Alert*\n\n{{ $json.failure_count }} workflow run(s) failed in the last 24 hours.\n\n{{ $json.recent_failures.map(f => `• <${f.url}|${f.name}> (${f.created_at})`).join('\\n') }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "send_failure_notification",
+      "name": "Send Failure Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://registry.npmjs.org/agent-browser",
+        "authentication": "none",
+        "sendBody": true,
+        "body": {}
+      },
+      "id": "verify_npm_availability",
+      "name": "Verify NPM Package Availability",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1000,
-        0
-      ],
-      "credentials": {
-        "genericHttpHeaderAuth": "github_token"
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "functionCode": "const releaseExists = items[0].json.id ? true : false;\nreturn [{\n  json: {\n    ...items[0].json,\n    releaseExists\n  }\n}];"
-      },
-      "id": "determine_release_status",
-      "name": "Determine Release Status",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1200,
-        0
+        200
       ]
     },
     {
       "parameters": {
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/git/refs/heads/main",
-        "method": "GET",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth"
+        "operation": "update"
       },
-      "id": "trigger_build_workflow",
-      "name": "Trigger Build Workflow",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "set_success_status",
+      "name": "Set Success Status",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        1400,
-        0
-      ],
-      "credentials": {
-        "genericHttpHeaderAuth": "github_token"
-      }
-    },
-    {
-      "parameters": {
-        "functionCode": "const commitSha = items[0].json.object?.sha;\nreturn [{\n  json: {\n    workflow: 'build-binaries',\n    ref: commitSha || 'main',\n    status: 'triggered'\n  }\n}];"
-      },
-      "id": "build_status",
-      "name": "Build Status",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1600,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/actions/runs",
-        "method": "GET",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "qs": {
-          "workflow_id": "release.yml",
-          "status": "completed",
-          "per_page": "1"
-        }
-      },
-      "id": "poll_build_status",
-      "name": "Poll Build Status",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1800,
-        0
-      ],
-      "credentials": {
-        "genericHttpHeaderAuth": "github_token"
-      }
-    },
-    {
-      "parameters": {
-        "functionCode": "const builds = items[0].json.workflow_runs || [];\nconst latestBuild = builds[0];\nconst conclusion = latestBuild?.conclusion;\nconst status = latestBuild?.status;\nreturn [{\n  json: {\n    buildSuccess: conclusion === 'success',\n    buildStatus: status,\n    buildConclusion: conclusion,\n    artifactsUrl: latestBuild?.artifacts_url\n  }\n}];"
-      },
-      "id": "check_build_success",
-      "name": "Check Build Success",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2000,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "url": "https://registry.npmjs.org/-/npm/v1/security/advisories",
-        "method": "GET"
-      },
-      "id": "verify_npm_access",
-      "name": "Verify NPM Access",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2200,
-        0
-      ],
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "functionCode": "const npmAccessible = items[0].statusCode < 400;\nreturn [{\n  json: {\n    npmAccessible,\n    readyToPublish: items[0].json.buildSuccess && npmAccessible\n  }\n}];"
-      },
-      "id": "publication_ready",
-      "name": "Publication Ready",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2400,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.readyToPublish }}",
-              "operation": "equals",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "id": "ready_to_publish",
-      "name": "Ready to Publish?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        2600,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "url": "https://api.github.com/repos/vercel-labs/agent-browser/releases",
-        "method": "POST",
-        "authentication": "generic",
-        "genericAuthType": "httpHeaderAuth",
-        "body": {
-          "tag_name": "v{{ $json.version }}",
-          "name": "v{{ $json.version }}",
-          "body": "Release version {{ $json.version }}",
-          "draft": false,
-          "prerelease": false
-        },
-        "bodyType": "json"
-      },
-      "id": "create_github_release",
-      "name": "Create GitHub Release",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2800,
-        0
-      ],
-      "credentials": {
-        "genericHttpHeaderAuth": "github_token"
-      }
-    },
-    {
-      "parameters": {
-        "functionCode": "return [{\n  json: {\n    releaseCreated: true,\n    releaseName: 'v' + items[0].json.version,\n    releaseUrl: items[0].json.html_url,\n    status: 'success'\n  }\n}];"
-      },
-      "id": "release_complete",
-      "name": "Release Complete",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3000,
-        0
+        1250,
+        200
       ]
     }
   ],
   "connections": {
-    "trigger": {
+    "trigger_schedule": {
       "main": [
         [
           {
-            "node": "fetch_local_version",
+            "node": "trigger_ci_workflow",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "check_latest_release",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "check_failed_workflows",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch_local_version": {
+    "trigger_ci_workflow": {
       "main": [
         [
           {
-            "node": "fetch_npm_version",
+            "node": "trigger_release_workflow",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "fetch_npm_version": {
+    "check_latest_release": {
+      "main": [
+        [
+          {
+            "node": "check_npm_version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_npm_version": {
       "main": [
         [
           {
@@ -312,128 +423,76 @@
       "main": [
         [
           {
-            "node": "check_should_release",
+            "node": "version_mismatch_check",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check_should_release": {
+    "version_mismatch_check": {
       "main": [
         [
           {
-            "node": "check_github_release",
+            "node": "trigger_release_on_mismatch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "verify_npm_availability",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check_github_release": {
+    "check_failed_workflows": {
       "main": [
         [
           {
-            "node": "determine_release_status",
+            "node": "analyze_failures",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "determine_release_status": {
+    "analyze_failures": {
       "main": [
         [
           {
-            "node": "trigger_build_workflow",
+            "node": "failure_notification_check",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "trigger_build_workflow": {
+    "failure_notification_check": {
       "main": [
         [
           {
-            "node": "build_status",
+            "node": "send_failure_notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "verify_npm_availability",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "build_status": {
+    "verify_npm_availability": {
       "main": [
         [
           {
-            "node": "poll_build_status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "poll_build_status": {
-      "main": [
-        [
-          {
-            "node": "check_build_success",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "check_build_success": {
-      "main": [
-        [
-          {
-            "node": "verify_npm_access",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "verify_npm_access": {
-      "main": [
-        [
-          {
-            "node": "publication_ready",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "publication_ready": {
-      "main": [
-        [
-          {
-            "node": "ready_to_publish",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "ready_to_publish": {
-      "main": [
-        [
-          {
-            "node": "create_github_release",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "create_github_release": {
-      "main": [
-        [
-          {
-            "node": "release_complete",
+            "node": "set_success_status",
             "type": "main",
             "index": 0
           }
@@ -441,7 +500,18 @@
       ]
     }
   },
+  "active": true,
   "settings": {
-    "executionOrder": "v1"
-  }
+    "executionOrder": "v1",
+    "errorHandler": {
+      "type": "crashOnError"
+    }
+  },
+  "staticData": null,
+  "tags": [
+    "ci-cd",
+    "agent-browser",
+    "release",
+    "monitoring"
+  ]
 }
